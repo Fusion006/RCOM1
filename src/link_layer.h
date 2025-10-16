@@ -23,7 +23,7 @@ standard[4] = 0x7e;
 */
 
 // Flag
-#define FLAG    0x7E  // 0 1 1 1 1 1 1 0 - Frame delimiter
+#define F    0x7E  // 0 1 1 1 1 1 1 0 - Frame delimiter
 
 // Address Field (A) Values
 #define A_TX    0x03  // 0 0 0 0 0 0 1 1 - Commands sent by Transmitter, replies sent by Receiver

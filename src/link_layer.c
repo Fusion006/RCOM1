@@ -159,10 +159,11 @@ int llread(unsigned char *packet)
     unsigned char calculatedBCC2 = 0;
     int retransmissionCount = 0;
     STOP = FALSE;
+    printf("llread entered \n");
     while(STOP == FALSE){
             unsigned char byte;
             int bytes = readByteSerialPort(&byte);
-            if (bytes <= 0) continue;
+            //if (bytes <= 0) continue;
             
             nBytesBuf += bytes;
 
