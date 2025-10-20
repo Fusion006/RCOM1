@@ -22,6 +22,16 @@ standard[3] = standard [1] ^ standard[2];
 standard[4] = 0x7e;
 */
 
+#define _POSIX_SOURCE 1 // POSIX compliant source
+
+#define FALSE 0
+#define TRUE 1
+
+#define BAUDRATE 38400
+#define BUF_SIZE 5
+
+
+
 // Flag
 #define F    0x7E  // 0 1 1 1 1 1 1 0 - Frame delimiter
 
@@ -42,11 +52,20 @@ standard[4] = 0x7e;
 #define C_REJ_0 0x01  // R 0 0 0 0 0 0 1 - REJ (reject / negative ACK) N(r)=0
 #define C_REJ_1 0x81  // R 0 0 0 0 0 0 1 - REJ (reject / negative ACK) N(r)=1
 
+
 typedef enum
 {
     LlTx,
     LlRx,
 } LinkLayerRole;
+
+typedef enum {
+    SET_MSG,
+    UA_MSG,
+    DISC_MSG,
+    INVALID_MSG,
+    NO_MSG
+} MessageRcvd;
 
 typedef struct
 {

@@ -13,16 +13,7 @@
 #include <termios.h>
 #include <unistd.h>
 
-#define _POSIX_SOURCE 1 // POSIX compliant source
 
-#define FALSE 0
-#define TRUE 1
-
-#define BAUDRATE 38400
-#define BUF_SIZE 5
-
-// MISC
-#define _POSIX_SOURCE 1 // POSIX compliant source
 
 //### READ and WRITE enum and functions ###
 const char* states[] = {"START","FLAG","A","C","BCC1","DATA","BCC2","FINAL"};
@@ -74,20 +65,20 @@ int llopen(LinkLayer connectionParameters)
         // The whole buffer must be sent even with the '\n'.
         //buf[5] = '\n';
         unsigned char buf[BUF_SIZE] = {0};
-        buf[0] = 0x7E;
-        buf[1] = 0x03;
-        buf[2] = 0x07;
+        buf[0] = F;
+        buf[1] = A_TX;
+        buf[2] = C_SET;
         buf[3] = buf[1] ^ buf[2];
-        buf[4] = 0x7E;
+        buf[4] = F;
 
-        llwrite(buf, 5);
+        //llwrite(buf, 5);
     }
     else { //assumir leitor
         unsigned char packet[256] = {0};
-        llread(packet);
+        //llread(packet);
     }
 
-    llclose();
+    //llclose();
 
     return 0;
 }
@@ -160,6 +151,9 @@ int llread(unsigned char *packet)
     int retransmissionCount = 0;
     STOP = FALSE;
     printf("llread entered \n");
+    
+    MessageRcvd messageRcvd = NO_MSG;
+
     while(STOP == FALSE){
             unsigned char byte;
             int bytes = readByteSerialPort(&byte);
@@ -172,14 +166,14 @@ int llread(unsigned char *packet)
 
             switch(currentState){
                 case Start:
-                    if (byte == 0x7E){
+                    if (byte == F){
                         currentState = FLAG;
                     }
                     break;
                     
                 case FLAG:
-                    if (byte == 0x7E) break;
-                    else if (byte == 0x03){
+                    if (byte == F) break;
+                    else if (byte == A_TX){
                         receivedA = byte;
                         currentState = A;
                     }
@@ -189,7 +183,7 @@ int llread(unsigned char *packet)
                     break;
                     
                 case A:
-                    if (byte == 0x7E) {
+                    if (byte == F) {
                         currentState = FLAG;
                     }
                     // Accept any valid control field value
@@ -208,7 +202,7 @@ int llread(unsigned char *packet)
                     break;
 
                 case C:
-                    if (byte == 0x7E) {
+                    if (byte == F) {
                         currentState = FLAG;
                     }
                     else if (byte == (receivedA ^ receivedC)) {
@@ -240,7 +234,7 @@ int llread(unsigned char *packet)
                     break;
                     
                 case BCC1:
-                    if (byte == 0x7E) {
+                    if (byte == F) {
                         // Frame complete - this is a supervision frame (no data field)
                         printf("Supervision frame complete\n");
                         
@@ -248,17 +242,20 @@ int llread(unsigned char *packet)
                         if (receivedC == C_SET) {
                             printf("SET received - sending UA response\n");
                             unsigned char uaBuf[5] = {FLAG, A_RX, C_UA, A_RX ^ C_UA, FLAG};
-                            writeBytesSerialPort(uaBuf, 5);
+                            messageRcvd = SET_MSG;
+                            //writeBytesSerialPort(uaBuf, 5);
                         }
                         else if (receivedC == C_DISC) {
                             printf("DISC received - sending DISC then UA response\n");
                             unsigned char discBuf[5] = {FLAG, A_RX, C_DISC, A_RX ^ C_DISC, FLAG};
-                            writeBytesSerialPort(discBuf, 5);
+                            messageRcvd = DISC_MSG;
+                            //writeBytesSerialPort(discBuf, 5);
                             // Wait for UA, then send UA
                             unsigned char uaBuf[5] = {FLAG, A_RX, C_UA, A_RX ^ C_UA, FLAG};
-                            writeBytesSerialPort(uaBuf, 5);
+                            //writeBytesSerialPort(uaBuf, 5);
                         }
                         else if (receivedC == C_UA) {
+                            messageRcvd = UA_MSG;
                             printf("UA received - acknowledgment confirmed\n");
                         }
                         else if (receivedC == C_RR_0 || receivedC == C_RR_1) {
@@ -289,7 +286,7 @@ int llread(unsigned char *packet)
                     break;
                     
                 case DATA:
-                    if (byte == 0x7E) {
+                    if (byte == F) {
                         // Shouldn't happen - missing BCC2
                         printf("Error: Missing BCC2!\n");
                         currentState = Start;
@@ -317,7 +314,7 @@ int llread(unsigned char *packet)
                     break;
                     
                 case BCC2:
-                    if (byte == 0x7E) {
+                    if (byte == F) {
                         // Last data byte was actually BCC2
                         dataIndex--; // Remove BCC2 from data
                         unsigned char receivedBCC2 = dataBuffer[dataIndex];
@@ -349,7 +346,7 @@ int llread(unsigned char *packet)
                                 // Send RR with next expected frame number
                                 unsigned char rrControl = (expectedFrameNumber == 0) ? C_RR_0 : C_RR_1;
                                 unsigned char rrBuf[5] = {FLAG, A_RX, rrControl, A_RX ^ rrControl, FLAG};
-                                writeBytesSerialPort(rrBuf, 5);
+                                //writeBytesSerialPort(rrBuf, 5);
                                 printf("Sent RR(%d) - ready for next frame\n", expectedFrameNumber);
                             }
                             else {
@@ -359,7 +356,7 @@ int llread(unsigned char *packet)
                                 // Send RR with next expected frame number (same as before)
                                 unsigned char rrControl = (expectedFrameNumber == 0) ? C_RR_0 : C_RR_1;
                                 unsigned char rrBuf[5] = {FLAG, A_RX, rrControl, A_RX ^ rrControl, FLAG};
-                                writeBytesSerialPort(rrBuf, 5);
+                                //writeBytesSerialPort(rrBuf, 5);
                                 printf("Sent RR(%d) - confirming duplicate\n", expectedFrameNumber);
                             }
                             
@@ -377,7 +374,7 @@ int llread(unsigned char *packet)
                                 printf("New frame I(%d) with data error - sending REJ\n", receivedFrameNumber);
                                 unsigned char rejControl = (expectedFrameNumber == 0) ? C_REJ_0 : C_REJ_1;
                                 unsigned char rejBuf[5] = {FLAG, A_RX, rejControl, A_RX ^ rejControl, FLAG};
-                                writeBytesSerialPort(rejBuf, 5);
+                                //writeBytesSerialPort(rejBuf, 5);
                                 printf("Sent REJ(%d) - requesting retransmission\n", expectedFrameNumber);
                             }
                             else {
@@ -385,7 +382,7 @@ int llread(unsigned char *packet)
                                 printf("Duplicate frame I(%d) with data error - confirming with RR\n", receivedFrameNumber);
                                 unsigned char rrControl = (expectedFrameNumber == 0) ? C_RR_0 : C_RR_1;
                                 unsigned char rrBuf[5] = {FLAG, A_RX, rrControl, A_RX ^ rrControl, FLAG};
-                                writeBytesSerialPort(rrBuf, 5);
+                                //writeBytesSerialPort(rrBuf, 5);
                                 printf("Sent RR(%d) - confirming duplicate\n", expectedFrameNumber);
                             }
                             
@@ -421,7 +418,7 @@ int llread(unsigned char *packet)
 
 
 
-    return 0;
+    return messageRcvd;
 }
 
 ////////////////////////////////////////////////
