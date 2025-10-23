@@ -6,6 +6,7 @@
 
 #define FALSE 0
 #define TRUE 1
+#define ACTIVE 2
 
 #define BAUDRATE 38400
 #define BUF_SIZE 5

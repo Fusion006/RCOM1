@@ -53,37 +53,43 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
     unsigned char packet[BUF_SIZE] = {0};
     int dataSize = 0;
 
-    switch (*messageRcvd)
-    {
-        case NO_MSG:
-            if(*communicationStatus == ClosedC){
-                llwrite(data, dataSize, SET_MSG); //Atencao que isto não é definivito
-                *communicationStatus = ConnectingC;
-            }
-            break;
-        case UA_MSG:
-            if (*communicationStatus == ConnectingC) {
-                llwrite(data, dataSize, DISC_MSG); //Temporario obviamente
-                *communicationStatus = DisconnectingC;
-            }
-            break;
-    
-        case DISC_MSG:
-            if (*communicationStatus == DisconnectingC){
-                *communicationStatus = EndC;
-            }
-            return 0;
+    int timedOut = ACTIVE;
 
-        case INVALID_MSG: // ambos são invalidos para o transmissor
-        case DATA_MSG:
-            break;
-        default:
-            break;
+    MessageType messageCntrl = *messageRcvd;
+    CommunicationStatus communicationStatusCtrl = *communicationStatus;
+    do {
+        timedOut = ACTIVE;
+        switch (messageCntrl)
+        {
+            case NO_MSG:
+                if(communicationStatusCtrl == ClosedC){
+                    llwrite(data, dataSize, SET_MSG); //Atencao que isto não é definivito
+                    *communicationStatus = ConnectingC;
+                }
+                break;
+            case UA_MSG:
+                if (communicationStatusCtrl == ConnectingC) {
+                    llwrite(data, dataSize, DISC_MSG); //Temporario obviamente
+                    *communicationStatus = DisconnectingC;
+                }
+                break;
+        
+            case DISC_MSG:
+                if (communicationStatusCtrl == DisconnectingC){
+                    *communicationStatus = EndC;
+                }
+                return 0;
+
+            case INVALID_MSG: // ambos são invalidos para o transmissor
+            case DATA_MSG:
+                break;
+            default:
+                break;
+        }
+  
     }
-
-
-    *messageRcvd = llread(packet);
-    
+    while (llread(packet, messageRcvd, &timedOut) || timedOut == TRUE);
+        
     return 0; 
 }
 
@@ -96,7 +102,8 @@ int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, M
     printf("Receiver Process Entered\n");        
 
 
-    *messaageRcvd = llread(packet);
+    int timedOut = FALSE;
+    llread(packet,messaageRcvd,&timedOut); // checkar para o valor de retorno
     
     sleep(1);
 

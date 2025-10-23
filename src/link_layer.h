@@ -32,8 +32,6 @@ typedef struct
 } LinkLayer;
 
 
-
-
 // Open a connection using the "port" parameters defined in struct linkLayer.
 // Return 0 on success or -1 on error.
 int llopen(LinkLayer connectionParameters);
@@ -44,7 +42,7 @@ int llwrite(const unsigned char *standard, int standardSize, const MessageType m
 
 // Receive data in packet.
 // Return number of chars read, or -1 on error.     // Para já está a devolver que mensagem recebeu
-int llread(unsigned char *packet);
+int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut);
 
 // Close previously opened connection and print transmission statistics in the console.
 // Return 0 on success or -1 on error.
