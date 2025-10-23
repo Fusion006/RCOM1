@@ -14,36 +14,6 @@
 #include <unistd.h>
 
 
-//### READ and WRITE enum and functions ###
-const char* states[] = {"START","FLAG","A","C","BCC1","DATA","BCC2","FINAL"};
-char * msgs_[] = {"SET_MSG", "UA_MSG","DATA_MSG",
-    "REJ_MSG","DISC_MSG","INVALID_MSG","NO_MSG"};
-
-enum State {
-    Start,
-    FLAG,
-    A,
-    C,
-    BCC1,      // XOR of A and C (header checksum)
-    DATA,      // Data bytes
-    BCC2,      // XOR of all data bytes (data checksum)
-    Final
-};
-
-int alarmEnabled = FALSE;
-int alarmCount = 0;
-volatile int STOP = FALSE;
-
-// Sequence number tracking for duplicate detection
-int expectedFrameNumber = 0;  // Expected I-frame sequence number (0 or 1)
-
-void alarmHandler(int signal);
-
-void alarmHandler(int signal){
-    alarmEnabled = FALSE;
-}
-
-//### end of READ and WRITE enum and functions ###
 
 ////////////////////////////////////////////////
 // LLOPEN
@@ -94,9 +64,7 @@ int llwrite(const unsigned char *data, int dataSize, const MessageType messageTy
       //  int bytes = writeBytesSerialPort(buf, BUF_SIZE);
         //printf("%d bytes written to serial port\n", bytes);
         
-        // Liga Alarme
-        //alarm(3);
-        //alarmEnabled = TRUE;
+        
 
         // Espera que a mensagem chegue
         sleep(1);
@@ -108,9 +76,6 @@ int llwrite(const unsigned char *data, int dataSize, const MessageType messageTy
             //int bytes = readByteSerialPort(&byte);
             MessageType messageRcvd = NO_MSG;
             unsigned char packet[BUF_SIZE] = {0};
-            printf("AAAAAAAAAAAAA\n");
-            messageRcvd = llread(packet);
-            printf("AAAAAAAAAAAAA\n");
 
             if(messageRcvd != NO_MSG){
                 return messageRcvd;
@@ -455,3 +420,9 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
 
     return 0;
 }
+
+void alarmHandler(int signal){
+    alarmEnabled = FALSE;
+}
+
+

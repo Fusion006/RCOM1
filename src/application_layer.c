@@ -53,7 +53,6 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
     unsigned char packet[BUF_SIZE] = {0};
     int dataSize = 0;
 
-
     switch (*messageRcvd)
     {
         case NO_MSG:
