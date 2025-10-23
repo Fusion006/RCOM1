@@ -31,7 +31,6 @@ standard[4] = 0x7e;
 #define BUF_SIZE 5
 
 
-
 // Flag
 #define F    0x7E  // 0 1 1 1 1 1 1 0 - Frame delimiter
 
@@ -59,13 +58,16 @@ typedef enum
     LlRx,
 } LinkLayerRole;
 
+
 typedef enum {
     SET_MSG,
     UA_MSG,
+    DATA_MSG,
+    REJ_MSG,
     DISC_MSG,
     INVALID_MSG,
     NO_MSG
-} MessageRcvd;
+} MessageType;
 
 typedef struct
 {
@@ -85,22 +87,22 @@ typedef struct
 #define TRUE 1
 
 
-
-int ll_process(int argc, char *argv[]);
 // Open a connection using the "port" parameters defined in struct linkLayer.
 // Return 0 on success or -1 on error.
 int llopen(LinkLayer connectionParameters);
 
 // Send data in standard with size standardSize.
 // Return number of chars written, or -1 on error.
-int llwrite(const unsigned char *standard, int standardSize);
+int llwrite(const unsigned char *standard, int standardSize, const MessageType messageType);
 
 // Receive data in packet.
-// Return number of chars read, or -1 on error.
+// Return number of chars read, or -1 on error.     // Para já está a devolver que mensagem recebeu
 int llread(unsigned char *packet);
 
 // Close previously opened connection and print transmission statistics in the console.
 // Return 0 on success or -1 on error.
 int llclose();
+
+int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSize);
 
 #endif // _LINK_LAYER_H_

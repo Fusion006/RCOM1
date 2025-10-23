@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 
+
+
 void applicationLayer(const char *serialPort, const char *role, int baudRate,
                       int nTries, int timeout, const char *filename)
 {
@@ -31,13 +33,13 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     llopen(link);
 
     CommunicationStatus communicationStatus = ClosedC;
-    MessageRcvd messaageRcvd = NO_MSG;
+    MessageType messageRcvd = NO_MSG;
     while(communicationStatus != EndC){
         if(link.role == LlRx){
-            receiverProcess(link, &communicationStatus, &messaageRcvd);
+            receiverProcess(link, &communicationStatus, &messageRcvd);
         }
         else{
-            transmitterProcess(link, &communicationStatus, &messaageRcvd);
+            transmitterProcess(link, &communicationStatus, &messageRcvd);
         }
     }
 
@@ -45,55 +47,59 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 }
 
 
-int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus, MessageRcvd * messaageRcvd){
+int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus, MessageType * messageRcvd){
 
-    unsigned char buf[BUF_SIZE] = {0};
+    unsigned char data[BUF_SIZE] = {0};
     unsigned char packet[BUF_SIZE] = {0};
-    
-    switch (*messaageRcvd)
+    int dataSize = 0;
+
+
+    switch (*messageRcvd)
     {
         case NO_MSG:
             if(*communicationStatus == ClosedC){
-                buf[0] = F;
-                buf[1] = A_TX;
-                buf[2] = C_SET;
-                buf[3] = buf[1] ^ buf[2];
-                buf[4] = F;
-                llwrite(buf, 5);
+                llwrite(data, dataSize, SET_MSG); //Atencao que isto não é definivito
                 *communicationStatus = ConnectingC;
             }
             break;
         case UA_MSG:
             if (*communicationStatus == ConnectingC) {
-                buf[0] = F;
-                buf[1] = A_TX;
-                buf[2] = C_DISC; // teste
-                buf[3] = buf[1] ^ buf[2];
-                buf[4] = F;
-                llwrite(buf, 5);
+                llwrite(data, dataSize, DISC_MSG); //Temporario obviamente
                 *communicationStatus = DisconnectingC;
             }
             break;
-        
+    
         case DISC_MSG:
             if (*communicationStatus == DisconnectingC){
                 *communicationStatus = EndC;
             }
+            return 0;
+
+        case INVALID_MSG: // ambos são invalidos para o transmissor
+        case DATA_MSG:
+            break;
         default:
             break;
     }
 
-    *messaageRcvd = llread(packet);
+
+    *messageRcvd = llread(packet);
+    
     return 0; 
 }
 
 
-int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, MessageRcvd * messaageRcvd){
-    unsigned char buf[BUF_SIZE] = {0};
+int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, MessageType * messaageRcvd){
+    unsigned char data[BUF_SIZE] = {0};
     unsigned char packet[BUF_SIZE] = {0};
+    int dataSize = 0;
+
+    printf("Receiver Process Entered\n");        
+
 
     *messaageRcvd = llread(packet);
     
+    sleep(1);
 
     switch (*messaageRcvd)
     {
@@ -101,24 +107,14 @@ int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, M
             break;
         case SET_MSG:
             if (*communicationStatus == ClosedC) {
-                buf[0] = F;
-                buf[1] = A_TX;
-                buf[2] = C_UA;
-                buf[3] = buf[1] ^ buf[2];
-                buf[4] = F;
-                llwrite(buf, 5);
+                llwrite(data, dataSize, UA_MSG); 
                 *communicationStatus = OpenC;
             }
             break;
         
         case DISC_MSG:
             if (*communicationStatus == OpenC){
-                buf[0] = F;
-                buf[1] = A_TX;
-                buf[2] = C_DISC;
-                buf[3] = buf[1] ^ buf[2];
-                buf[4] = F;
-                llwrite(buf, 5);
+                llwrite(data, dataSize, DISC_MSG); 
                 *communicationStatus = EndC;
             }
         default:

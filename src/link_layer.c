@@ -14,9 +14,10 @@
 #include <unistd.h>
 
 
-
 //### READ and WRITE enum and functions ###
 const char* states[] = {"START","FLAG","A","C","BCC1","DATA","BCC2","FINAL"};
+char * msgs_[] = {"SET_MSG", "UA_MSG","DATA_MSG",
+    "REJ_MSG","DISC_MSG","INVALID_MSG","NO_MSG"};
 
 enum State {
     Start,
@@ -58,37 +59,14 @@ int llopen(LinkLayer connectionParameters)
 
     printf("Serial port %s opened\n", connectionParameters.serialPort);
 
-    if(connectionParameters.role == LlTx){
-        
-        // In non-canonical mode, '\n' does not end the writing.
-        // Test this condition by placing a '\n' in the middle of the buffer.
-        // The whole buffer must be sent even with the '\n'.
-        //buf[5] = '\n';
-        unsigned char buf[BUF_SIZE] = {0};
-        buf[0] = F;
-        buf[1] = A_TX;
-        buf[2] = C_SET;
-        buf[3] = buf[1] ^ buf[2];
-        buf[4] = F;
-
-        //llwrite(buf, 5);
-    }
-    else { //assumir leitor
-        unsigned char packet[256] = {0};
-        //llread(packet);
-    }
-
-    //llclose();
-
     return 0;
 }
 
 ////////////////////////////////////////////////
 // LLWRITE
 ////////////////////////////////////////////////
-int llwrite(const unsigned char *buf, int bufSize)
+int llwrite(const unsigned char *data, int dataSize, const MessageType messageType)
 {
-    
     
     struct sigaction act = {0};
     act.sa_handler = &alarmHandler;
@@ -98,37 +76,48 @@ int llwrite(const unsigned char *buf, int bufSize)
         exit(1);
     }
 
-    while(STOP == FALSE){
+    unsigned char buf[BUF_SIZE] = {0};
+
+    printf("\nSending message %s\n\n", msgs_[messageType]);
+
+    if(!packetBuilder(messageType, buf, BUF_SIZE)){
+        int bytes = writeBytesSerialPort(buf, BUF_SIZE);
+    }
+
+
+
+
+
+    //while(STOP == FALSE){
         
         // Faz escrita 
-        int bytes = writeBytesSerialPort(buf, BUF_SIZE);
-        printf("%d bytes written to serial port\n", bytes);
+      //  int bytes = writeBytesSerialPort(buf, BUF_SIZE);
+        //printf("%d bytes written to serial port\n", bytes);
         
         // Liga Alarme
-        alarm(3);
-        alarmEnabled = TRUE;
+        //alarm(3);
+        //alarmEnabled = TRUE;
 
         // Espera que a mensagem chegue
         sleep(1);
         
         int nBytesBuf = 0;
         // Enquanto o alarme não apita
-        while(alarmEnabled == TRUE){
+        /*while(alarmEnabled == TRUE){
             unsigned char byte;
-            int bytes = readByteSerialPort(&byte);
-            nBytesBuf += bytes;
+            //int bytes = readByteSerialPort(&byte);
+            MessageType messageRcvd = NO_MSG;
+            unsigned char packet[BUF_SIZE] = {0};
+            printf("AAAAAAAAAAAAA\n");
+            messageRcvd = llread(packet);
+            printf("AAAAAAAAAAAAA\n");
 
-            printf("var = 0x%02X\n", byte);
-
-            if (nBytesBuf == 6)
-            {
-                printf("Received 5 bytes. Stop reading from serial port.\n");
-                STOP = TRUE;
-                break;
+            if(messageRcvd != NO_MSG){
+                return messageRcvd;
             }
-        }
-        printf("Total bytes received: %d\n", nBytesBuf);
-    }
+        }*/
+        //printf("Total bytes received: %d\n", nBytesBuf);
+    //}
     
     return 0;
 }
@@ -149,16 +138,12 @@ int llread(unsigned char *packet)
     int dataIndex = 0;
     unsigned char calculatedBCC2 = 0;
     int retransmissionCount = 0;
-    STOP = FALSE;
-    printf("llread entered \n");
-    
-    MessageRcvd messageRcvd = NO_MSG;
+    STOP = FALSE;    
+    MessageType messageRcvd = NO_MSG;
 
     while(STOP == FALSE){
             unsigned char byte;
-            int bytes = readByteSerialPort(&byte);
-            //if (bytes <= 0) continue;
-            
+            int bytes = readByteSerialPort(&byte);            
             nBytesBuf += bytes;
 
             printf("Current State : %s\n", states[currentState]);
@@ -241,18 +226,11 @@ int llread(unsigned char *packet)
                         // Process supervision frames
                         if (receivedC == C_SET) {
                             printf("SET received - sending UA response\n");
-                            unsigned char uaBuf[5] = {FLAG, A_RX, C_UA, A_RX ^ C_UA, FLAG};
                             messageRcvd = SET_MSG;
-                            //writeBytesSerialPort(uaBuf, 5);
                         }
                         else if (receivedC == C_DISC) {
                             printf("DISC received - sending DISC then UA response\n");
-                            unsigned char discBuf[5] = {FLAG, A_RX, C_DISC, A_RX ^ C_DISC, FLAG};
                             messageRcvd = DISC_MSG;
-                            //writeBytesSerialPort(discBuf, 5);
-                            // Wait for UA, then send UA
-                            unsigned char uaBuf[5] = {FLAG, A_RX, C_UA, A_RX ^ C_UA, FLAG};
-                            //writeBytesSerialPort(uaBuf, 5);
                         }
                         else if (receivedC == C_UA) {
                             messageRcvd = UA_MSG;
@@ -267,7 +245,7 @@ int llread(unsigned char *packet)
                             printf("REJ(%d) received - retransmission requested\n", rejFrame);
                         }
                         
-                        currentState = Final;
+                        STOP = TRUE;
                     }
                     else {
                         // Information frame - start receiving data
@@ -360,7 +338,6 @@ int llread(unsigned char *packet)
                                 printf("Sent RR(%d) - confirming duplicate\n", expectedFrameNumber);
                             }
                             
-                            currentState = Final;
                             STOP = TRUE;
                             alarm(0); // Cancel alarm
                         }
@@ -400,23 +377,17 @@ int llread(unsigned char *packet)
                         currentState = DATA;
                     }
                     break;
-                    
-                case Final:
-                    STOP = TRUE;
-                    printf("Frame processing complete\n");
-                    // Reset state for next frame if needed
-                    dataIndex = 0;
-                    calculatedBCC2 = 0;
-                    receivedA = 0;
-                    receivedC = 0;
-                    break;
             }
         }
+
+        printf("Frame processing complete\n");
+
 
 
     printf("Total bytes received: %d\n", nBytesBuf);
 
-
+    printf("\n\nReceived Message : %s\n\n", msgs_[messageRcvd]);
+    
 
     return messageRcvd;
 }
@@ -431,6 +402,55 @@ int llclose()
     {
         perror("closeSerialPort");
         exit(-1);
+    }
+
+    return 0;
+}
+
+////////////////////////////////////////////////
+// PACKET BUILDER
+////////////////////////////////////////////////
+
+int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSize){
+    switch (messageType)
+    {
+    case SET_MSG:
+        if(bufSize < 5){
+            return -1;
+        }
+        buf[0] = F;
+        buf[1] = A_TX;
+        buf[2] = C_SET;
+        buf[3] = buf[1] ^ buf[2];
+        buf[4] = F;
+        break;
+
+    case UA_MSG:
+        if(bufSize < 5){
+            return -1;
+        }
+        buf[0] = F;
+        buf[1] = A_TX;
+        buf[2] = C_UA;
+        buf[3] = buf[1] ^ buf[2];
+        buf[4] = F;
+        break;
+    case DATA_MSG:
+        break;
+    case REJ_MSG:
+        break;
+    case DISC_MSG:
+        if(bufSize < 5){
+            return -1;
+        }
+        buf[0] = F;
+        buf[1] = A_TX;
+        buf[2] = C_DISC;
+        buf[3] = buf[1] ^ buf[2];
+        buf[4] = F;
+        break;
+    default:
+        break;
     }
 
     return 0;
