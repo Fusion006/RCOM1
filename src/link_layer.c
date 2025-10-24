@@ -423,14 +423,15 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
         else return -1;
         buf[2] = C_I_0;
         buf[3] = buf[1] ^ buf[2];
-        //buf[4] = data[0];
-        //buf[bufSize - (bufSize - (dataSize + 3))] = data[0];
+        
+        // Copy data and calculate BCC2
+        buf[4 + dataSize] = 0; // Initialize BCC2 position
         for(int i = 0 ; i < dataSize ; i++){
             buf[i + 4] = data[i];
-            buf[bufSize - (bufSize - (dataSize + 3))] ^= data[i];
+            buf[4 + dataSize] ^= data[i]; // BCC2 is at position 4 + dataSize
         }
 
-        buf[bufSize - (bufSize - (dataSize + 4))] = F; //ultimo packet
+        buf[4 + dataSize + 1] = F; // Final FLAG after BCC2
         printf("\n\nBUFFER I0\n");
         for (int i = 0 ; i < 6 + dataSize ; i++ ){
             printf("BUFFER %d : %#08x\n\n",i + 1, buf[i]);
