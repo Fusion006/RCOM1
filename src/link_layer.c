@@ -35,14 +35,15 @@ int llopen(LinkLayer connectionParameters)
 ////////////////////////////////////////////////
 // LLWRITE
 ////////////////////////////////////////////////
-int llwrite(const unsigned char *data, int dataSize, const MessageType messageType)
+int llwrite(const unsigned char *data, int dataSize, const MessageType messageType, LinkLayerRole linkLayerRole)
 {
     
     unsigned char buf[BUF_SIZE] = {0};
 
     printf("\nSending message: %s\n\n", msgs_[messageType]);
 
-    if(!packetBuilder(messageType, buf, BUF_SIZE)){
+    const unsigned char * teste_buf = "MENSAGEM_TESTE";
+    if(!packetBuilder(messageType, buf, BUF_SIZE, teste_buf, 14, linkLayerRole)){
         int bytes = writeBytesSerialPort(buf, BUF_SIZE);
     }
 
@@ -365,7 +366,7 @@ int llclose()
 // PACKET BUILDER
 ////////////////////////////////////////////////
 
-int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSize){
+int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSize, const unsigned char * data, int dataSize, LinkLayerRole role){
     switch (messageType)
     {
     case SET_MSG:
@@ -373,32 +374,108 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
             return -1;
         }
         buf[0] = F;
-        buf[1] = A_TX;
+        if(role == LlTx) buf[1] = A_TX;
+        else return -1;
         buf[2] = C_SET;
         buf[3] = buf[1] ^ buf[2];
         buf[4] = F;
         break;
-
+    case RR0_MSG:
+        if(bufSize < 5){
+            return -1;
+        }
+        buf[0] = F;
+        if(role == LlRx) buf[1] = A_RX;
+        else return -1;
+        buf[2] = C_RR_0;
+        buf[3] = buf[1] ^ buf[2];
+        buf[4] = F;
+        break;
+    case RR1_MSG:
+        if(bufSize < 5){
+            return -1;
+        }
+        buf[0] = F;
+        if(role == LlRx) buf[1] = A_RX;
+        else return -1;
+        buf[2] = C_RR_1;
+        buf[3] = buf[1] ^ buf[2];
+        buf[4] = F;
+        break;
     case UA_MSG:
         if(bufSize < 5){
             return -1;
         }
         buf[0] = F;
-        buf[1] = A_TX;
+        if(role == LlRx) buf[1] = A_RX;
+        else buf[1] = A_TX;
         buf[2] = C_UA;
         buf[3] = buf[1] ^ buf[2];
         buf[4] = F;
         break;
-    case DATA_MSG:
+    case I0_MSG:
+        printf("PACKET BUILDER I0\n");
+        if(dataSize > BUF_SIZE - 6 && bufSize < dataSize + 6){
+            return -1;
+        }
+        buf[0] = F;
+        if(role == LlTx) buf[1] = A_TX;
+        else return -1;
+        buf[2] = C_I_0;
+        buf[3] = buf[1] ^ buf[2];
+        //buf[4] = data[0];
+        //buf[bufSize - (bufSize - (dataSize + 3))] = data[0];
+        for(int i = 0 ; i < dataSize ; i++){
+            buf[i + 4] = data[i];
+            buf[bufSize - (bufSize - (dataSize + 3))] ^= data[i];
+        }
+
+        buf[bufSize - (bufSize - (dataSize + 4))] = F; //ultimo packet
+        printf("\n\nBUFFER I0\n");
+        for (int i = 0 ; i < 6 + dataSize ; i++ ){
+            printf("BUFFER %d : %#08x\n\n",i + 1, buf[i]);
+        }
         break;
-    case REJ_MSG:
+    case I1_MSG:
+        if(dataSize > BUF_SIZE - 6 && bufSize < dataSize + 6){
+            return -1;
+        }
+        buf[0] = F;
+        if(role == LlTx) buf[1] = A_TX;
+        else return -1;
+        buf[2] = C_I_1;
+        buf[3] = buf[1] ^ buf[2];
+        buf[bufSize - 1]; //ultimo packet
+        break;
+    case REJ0_MSG:
+        if(bufSize < 5){
+            return -1;
+        }
+        buf[0] = F;
+        if(role == LlRx) buf[1] = A_RX;
+        else return -1;
+        buf[2] = C_REJ_0;
+        buf[3] = buf[1] ^ buf[2];
+        buf[4] = F;
+        break;
+    case REJ1_MSG:
+        if(bufSize < 5){
+            return -1;
+        }
+        buf[0] = F;
+        if(role == LlRx) buf[1] = A_RX;
+        else return -1;
+        buf[2] = C_REJ_1;
+        buf[3] = buf[1] ^ buf[2];
+        buf[4] = F;
         break;
     case DISC_MSG:
         if(bufSize < 5){
             return -1;
         }
         buf[0] = F;
-        buf[1] = A_TX;
+        if(role == LlRx) buf[1] = A_RX;
+        else buf[1] = A_TX;
         buf[2] = C_DISC;
         buf[3] = buf[1] ^ buf[2];
         buf[4] = F;

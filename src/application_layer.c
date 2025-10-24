@@ -34,12 +34,13 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 
     CommunicationStatus communicationStatus = ClosedC;
     MessageType messageRcvd = NO_MSG;
+    char data[BUF_SIZE] = {0};
     while(communicationStatus != EndC){
         if(link.role == LlRx){
             receiverProcess(link, &communicationStatus, &messageRcvd);
         }
         else{
-            transmitterProcess(link, &communicationStatus, &messageRcvd);
+            transmitterProcess(link, &communicationStatus, &messageRcvd, ""); // alterar
         }
     }
 
@@ -47,9 +48,8 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
 }
 
 
-int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus, MessageType * messageRcvd){
+int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus, MessageType * messageRcvd, const char * data){
 
-    unsigned char data[BUF_SIZE] = {0};
     unsigned char packet[BUF_SIZE] = {0};
     int dataSize = 0;
 
@@ -63,13 +63,14 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
         {
             case NO_MSG:
                 if(communicationStatusCtrl == ClosedC){
-                    llwrite(data, dataSize, SET_MSG); //Atencao que isto não é definivito
+                    //llwrite(data, dataSize, SET_MSG, LlTx); //Atencao que isto não é definivito
+                    llwrite(data, dataSize, I0_MSG, LlTx); //Atencao que isto não é definivito
                     *communicationStatus = ConnectingC;
                 }
                 break;
             case UA_MSG:
                 if (communicationStatusCtrl == ConnectingC) {
-                    llwrite(data, dataSize, DISC_MSG); //Temporario obviamente
+                    llwrite(data, dataSize, DISC_MSG, LlTx); //Temporario obviamente
                     *communicationStatus = DisconnectingC;
                 }
                 break;
@@ -81,8 +82,6 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
                 return 0;
 
             case INVALID_MSG: // ambos são invalidos para o transmissor
-            case DATA_MSG:
-                break;
             default:
                 break;
         }
@@ -113,14 +112,14 @@ int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, M
             break;
         case SET_MSG:
             if (*communicationStatus == ClosedC) {
-                llwrite(data, dataSize, UA_MSG); 
+                llwrite(data, dataSize, UA_MSG, LlRx); 
                 *communicationStatus = OpenC;
             }
             break;
         
         case DISC_MSG:
             if (*communicationStatus == OpenC){
-                llwrite(data, dataSize, DISC_MSG); 
+                llwrite(data, dataSize, DISC_MSG, LlRx); 
                 *communicationStatus = EndC;
             }
         default:
