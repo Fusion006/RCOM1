@@ -43,9 +43,17 @@ int llwrite(const unsigned char *data, int dataSize, const MessageType messageTy
     printf("\nSending message: %s\n\n", msgs_[messageType]);
 
     const unsigned char * teste_buf = "MENSAGEM_TESTE";
-    if(!packetBuilder(messageType, buf, BUF_SIZE, teste_buf, 14, linkLayerRole)){
-        int bytes = writeBytesSerialPort(buf, BUF_SIZE);
+    if(messageType == I0_MSG){
+        if(!packetBuilder(messageType, buf, 20, teste_buf, 14, linkLayerRole)){
+            int bytes = writeBytesSerialPort(buf, BUF_SIZE);
+        }
     }
+    else {
+        if(!packetBuilder(messageType, buf, 5, NULL, 0, linkLayerRole)){
+            int bytes = writeBytesSerialPort(buf, 5);
+        }
+    }
+    
 
     return 0;
 }
@@ -82,20 +90,22 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
     enum State currentState = Start;
     unsigned char receivedA = 0;
     unsigned char receivedC = 0;
-    unsigned char dataBuffer[MAX_PAYLOAD_SIZE];
+    unsigned char dataBuffer[MAX_PAYLOAD_SIZE] = {0};
     int dataIndex = 0;
     unsigned char calculatedBCC2 = 0;
     int retransmissionCount = 0;
     STOP = FALSE;    
 
+    unsigned char beforeRcvdByte = 0x0;
+
     while(STOP == FALSE && (alarmActive == alarmEnabled)){
         unsigned char byte;
-        printf("HERE\n");
         int bytes = readByteSerialPort(&byte);            
         nBytesBuf += bytes;
 
         printf("Current State : %s\n", states[currentState]);
         printf("Byte received: 0x%02X\n", byte);
+        
 
         switch(currentState){
             case Start:
@@ -106,7 +116,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
                 
             case FLAG:
                 if (byte == F) break;
-                else if (byte == A_TX){
+                else if (byte == A_TX || byte == A_RX){
                     receivedA = byte;
                     currentState = A;
                 }
@@ -186,6 +196,12 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
                     }
                     else if (receivedC == C_RR_0 || receivedC == C_RR_1) {
                         int ackFrame = (receivedC == C_RR_1) ? 1 : 0;
+                        if(receivedC == C_RR_0){
+                            *messageRcvd = RR0_MSG;
+                        }
+                        else {
+                            *messageRcvd = RR1_MSG;
+                        }
                         printf("RR(%d) received - positive acknowledgment\n", ackFrame);
                     }
                     else if (receivedC == C_REJ_0 || receivedC == C_REJ_1) {
@@ -198,6 +214,13 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
                 else {
                     // Information frame - start receiving data
                     if (receivedC == C_I_0 || receivedC == C_I_1) {
+                        
+                        if(receivedC == C_I_0){
+                            *messageRcvd = I0_MSG;
+                        }
+                        else if(receivedC == C_I_1){
+                            *messageRcvd =  I1_MSG;
+                        }
                         printf("Starting data reception for I-frame\n");
                         dataBuffer[dataIndex++] = byte;
                         calculatedBCC2 = byte;
@@ -206,126 +229,55 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
                     else {
                         // Supervision frame shouldn't have data - error
                         printf("Error: Supervision frame has data field!\n");
-                        currentState = Start;
+                        currentState = Start; 
+                        // STOP = TRUE;
+                        // *messageRcvd = INVALID_MSG;
+                        // printf("Frame processing terminated due to error\n");
                     }
                 }
                 break;
                 
             case DATA:
                 if (byte == F) {
-                    // Shouldn't happen - missing BCC2
-                    printf("Error: Missing BCC2!\n");
-                    currentState = Start;
-                }
-                else {
-                    // Check if this could be BCC2 by trying to validate
-                    // For now, we need to know when data ends
-                    // Simple approach: assume next byte after data is BCC2
-                    // We'll validate in BCC2 state
-                    dataBuffer[dataIndex] = byte;
-                    
-                    // Check if this byte XORed with previous equals 0 (potential BCC2)
-                    unsigned char testBCC2 = calculatedBCC2;
-                    for (int i = dataIndex; i < dataIndex + 1; i++) {
-                        testBCC2 ^= dataBuffer[i];
-                    }
-                    
-                    // Store byte and update running XOR
-                    calculatedBCC2 ^= byte;
-                    dataIndex++;
-                    
-                    // Move to BCC2 state to check next byte
-                    currentState = BCC2;
-                }
-                break;
-                
-            case BCC2:
-                if (byte == F) {
-                    // Last data byte was actually BCC2
-                    dataIndex--; // Remove BCC2 from data
-                    unsigned char receivedBCC2 = dataBuffer[dataIndex];
-                    
-                    // Recalculate BCC2 without the last byte
-                    calculatedBCC2 = 0;
-                    for (int i = 0; i < dataIndex; i++) {
-                        calculatedBCC2 ^= dataBuffer[i];
-                    }
-                    
-                    // Determine the received frame sequence number
-                    int receivedFrameNumber = (receivedC == C_I_1) ? 1 : 0;
-                    
-                    if (receivedBCC2 == calculatedBCC2) {
-                        // No errors in header or data field
-                        printf("BCC2 correct! Data received successfully.\n");
-                        printf("Received %d data bytes\n", dataIndex);
-                        
-                        // Check if this is a new frame or duplicate
-                        if (receivedFrameNumber == expectedFrameNumber) {
-                            // New frame - accept data and pass to Application
-                            printf("New frame I(%d) accepted - passing to Application\n", receivedFrameNumber);
-                            // Copy data to packet for application layer
-                            memcpy(packet, dataBuffer, dataIndex);
-                            
-                            // Toggle expected frame number for next transmission
-                            expectedFrameNumber = 1 - expectedFrameNumber;
-                            
-                            // Send RR with next expected frame number
-                            unsigned char rrControl = (expectedFrameNumber == 0) ? C_RR_0 : C_RR_1;
-                            unsigned char rrBuf[5] = {FLAG, A_RX, rrControl, A_RX ^ rrControl, FLAG};
-                            //writeBytesSerialPort(rrBuf, 5);
-                            printf("Sent RR(%d) - ready for next frame\n", expectedFrameNumber);
+                    calculatedBCC2 ^= beforeRcvdByte;
+
+                    printf("\nReceived BCC2 : %#08x\n",beforeRcvdByte);
+                    printf("Calculated BCC2 : %#08x\n",calculatedBCC2);
+
+
+                    dataBuffer[dataIndex] = 0x00;
+                    dataIndex--;
+
+                    if (beforeRcvdByte == calculatedBCC2) {
+                        printf("Correct BCC2\n");
+
+                        for (int i = 0 ; i < dataIndex ; i++){
+                            printf("\nRECEIVED BUFFER %d : %#08x\n", i, dataBuffer[i]);
                         }
-                        else {
-                            // Duplicate frame - discard data but confirm with RR
-                            printf("Duplicate frame I(%d) detected - discarding data\n", receivedFrameNumber);
-                            
-                            // Send RR with next expected frame number (same as before)
-                            unsigned char rrControl = (expectedFrameNumber == 0) ? C_RR_0 : C_RR_1;
-                            unsigned char rrBuf[5] = {FLAG, A_RX, rrControl, A_RX ^ rrControl, FLAG};
-                            //writeBytesSerialPort(rrBuf, 5);
-                            printf("Sent RR(%d) - confirming duplicate\n", expectedFrameNumber);
+
+                        STOP = TRUE;
+                    }
+                    else {
+                        printf("Incorrect BCC2\n");
+                        
+                        for (int i = 0 ; i < dataIndex ; i++){
+                            printf("\nRECEIVED BUFFER %d : %#08x\n", i, dataBuffer[i]);
                         }
                         
                         STOP = TRUE;
-                        alarm(0); // Cancel alarm
-                    }
-                    else {
-                        // BCC2 error - no header error but data field error
-                        printf("BCC2 error! Expected 0x%02X, got 0x%02X\n", calculatedBCC2, receivedBCC2);
-                        
-                        // Check if new frame or duplicate
-                        if (receivedFrameNumber == expectedFrameNumber) {
-                            // New frame with error - send REJ to request retransmission
-                            printf("New frame I(%d) with data error - sending REJ\n", receivedFrameNumber);
-                            unsigned char rejControl = (expectedFrameNumber == 0) ? C_REJ_0 : C_REJ_1;
-                            unsigned char rejBuf[5] = {FLAG, A_RX, rejControl, A_RX ^ rejControl, FLAG};
-                            //writeBytesSerialPort(rejBuf, 5);
-                            printf("Sent REJ(%d) - requesting retransmission\n", expectedFrameNumber);
-                        }
-                        else {
-                            // Duplicate with error - confirm with RR (data already discarded)
-                            printf("Duplicate frame I(%d) with data error - confirming with RR\n", receivedFrameNumber);
-                            unsigned char rrControl = (expectedFrameNumber == 0) ? C_RR_0 : C_RR_1;
-                            unsigned char rrBuf[5] = {FLAG, A_RX, rrControl, A_RX ^ rrControl, FLAG};
-                            //writeBytesSerialPort(rrBuf, 5);
-                            printf("Sent RR(%d) - confirming duplicate\n", expectedFrameNumber);
-                        }
-                        
-                        currentState = Start;
-                        // Reset for next frame
-                        dataIndex = 0;
-                        calculatedBCC2 = 0;
                     }
                 }
                 else {
-                    // Continue receiving data
-                    dataBuffer[dataIndex++] = byte;
-                    calculatedBCC2 ^= byte;
-                    // Stay in DATA state
-                    currentState = DATA;
+                    dataBuffer[dataIndex] = byte;
+                    
+                    // Store byte and update running XOR
+                    calculatedBCC2 ^= byte; 
+                    dataIndex++;
                 }
                 break;
         }
+
+        beforeRcvdByte = byte;
     }
 
     if (alarmActive && !alarmEnabled){
@@ -438,15 +390,28 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
         }
         break;
     case I1_MSG:
+        printf("PACKET BUILDER I0\n");
         if(dataSize > BUF_SIZE - 6 && bufSize < dataSize + 6){
             return -1;
         }
         buf[0] = F;
         if(role == LlTx) buf[1] = A_TX;
         else return -1;
-        buf[2] = C_I_1;
+        buf[2] = C_I_1; 
         buf[3] = buf[1] ^ buf[2];
-        buf[bufSize - 1]; //ultimo packet
+        
+        // Copy data and calculate BCC2
+        buf[4 + dataSize] = 0; // Initialize BCC2 position
+        for(int i = 0 ; i < dataSize ; i++){
+            buf[i + 4] = data[i];
+            buf[4 + dataSize] ^= data[i]; // BCC2 is at position 4 + dataSize
+        }
+
+        buf[4 + dataSize + 1] = F; // Final FLAG after BCC2
+        printf("\n\nBUFFER I1\n");
+        for (int i = 0 ; i < 6 + dataSize ; i++ ){
+            printf("BUFFER %d : %#08x\n\n",i + 1, buf[i]);
+        }
         break;
     case REJ0_MSG:
         if(bufSize < 5){

@@ -63,18 +63,31 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
         {
             case NO_MSG:
                 if(communicationStatusCtrl == ClosedC){
-                    //llwrite(data, dataSize, SET_MSG, LlTx); //Atencao que isto não é definivito
-                    llwrite(data, dataSize, I0_MSG, LlTx); //Atencao que isto não é definivito
+                    llwrite(data, dataSize, SET_MSG, LlTx); 
+                    //llwrite(data, dataSize, I0_MSG, LlTx); //Atencao que isto não é definivito
                     *communicationStatus = ConnectingC;
                 }
                 break;
             case UA_MSG:
                 if (communicationStatusCtrl == ConnectingC) {
-                    llwrite(data, dataSize, DISC_MSG, LlTx); //Temporario obviamente
-                    *communicationStatus = DisconnectingC;
+                    llwrite(data, dataSize, I0_MSG, LlTx); //Atencao que isto não é definivito
+                    *communicationStatus = OpenC;
                 }
                 break;
         
+            case RR0_MSG:
+                if (communicationStatusCtrl == OpenC) {
+                    llwrite(data, dataSize, DISC_MSG /*I1_MSG */, LlTx); //Temporario obviamente
+                    *communicationStatus = DisconnectingC;
+                }
+                break;
+
+            case RR1_MSG:
+                if (communicationStatusCtrl == OpenC) {
+                    llwrite(data, dataSize, DISC_MSG /*I0_MSG */, LlRx); //Temporario obviamente
+                    *communicationStatus = DisconnectingC;
+                }
+                break;
             case DISC_MSG:
                 if (communicationStatusCtrl == DisconnectingC){
                     *communicationStatus = EndC;
@@ -116,7 +129,18 @@ int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, M
                 *communicationStatus = OpenC;
             }
             break;
-        
+        case I0_MSG:
+            if (*communicationStatus == OpenC) {
+                llwrite(data, dataSize, RR0_MSG, LlRx); 
+                *communicationStatus = OpenC;
+            }
+            break;
+        case I1_MSG:
+            if (*communicationStatus == OpenC) {
+                llwrite(data, dataSize, RR1_MSG, LlRx); 
+                *communicationStatus = OpenC;
+            }
+            break;
         case DISC_MSG:
             if (*communicationStatus == OpenC){
                 llwrite(data, dataSize, DISC_MSG, LlRx); 
