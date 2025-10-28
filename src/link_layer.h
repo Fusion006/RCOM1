@@ -38,7 +38,7 @@ int llopen(LinkLayer connectionParameters);
 
 // Send data in standard with size standardSize.
 // Return number of chars written, or -1 on error.
-int llwrite(const unsigned char *standard, int standardSize, const MessageType messageType, LinkLayerRole linkLayerRole);
+int llwrite(const unsigned char *data, int dataSize, const MessageType messageType, LinkLayerRole linkLayerRole, int * ignoredBytes);
 
 // Receive data in packet.
 // Return number of chars read, or -1 on error.     // Para já está a devolver que mensagem recebeu
@@ -48,9 +48,10 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut);
 // Return 0 on success or -1 on error.
 int llclose();
 
-int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSize, const unsigned char * data, int dataSize, LinkLayerRole role);
+int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSize, const unsigned char * data, int dataSize, LinkLayerRole role, int * numStuffs, int * ignoredBytes);
 
 void alarmHandler(int signal);
 
+int stuffing(const unsigned char * data, unsigned char * buffer, const int dataSize, int * numStuffs, int * ignoredBytes); //returns number of stuffs
 
 #endif // _LINK_LAYER_H_

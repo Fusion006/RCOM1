@@ -35,27 +35,29 @@ int llopen(LinkLayer connectionParameters)
 ////////////////////////////////////////////////
 // LLWRITE
 ////////////////////////////////////////////////
-int llwrite(const unsigned char *data, int dataSize, const MessageType messageType, LinkLayerRole linkLayerRole)
+int llwrite(const unsigned char *data, int dataSize, const MessageType messageType, LinkLayerRole linkLayerRole, int * ignoredBytes)
 {
-    
+    int numStuffs = 0;
     unsigned char buf[BUF_SIZE] = {0};
+    int bytes = 0;
 
     printf("\nSending message: %s\n\n", msgs_[messageType]);
 
     const unsigned char * teste_buf = "MENSAGEM_TESTE";
+
     if(messageType == I0_MSG){
-        if(!packetBuilder(messageType, buf, 20, teste_buf, 14, linkLayerRole)){
-            int bytes = writeBytesSerialPort(buf, BUF_SIZE);
+        if(!packetBuilder(messageType, buf, 20, teste_buf, 14, linkLayerRole, &numStuffs, ignoredBytes)){
+            bytes = writeBytesSerialPort(buf, BUF_SIZE);
         }
     }
     else {
-        if(!packetBuilder(messageType, buf, 5, NULL, 0, linkLayerRole)){
-            int bytes = writeBytesSerialPort(buf, 5);
+        if(!packetBuilder(messageType, buf, 5, NULL, 0, linkLayerRole, &numStuffs, ignoredBytes)){
+            bytes = writeBytesSerialPort(buf, 5);
         }
     }
     
 
-    return 0;
+    return bytes;
 }
 
 ////////////////////////////////////////////////
@@ -84,6 +86,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
     }
 
     printf("llread entered \n");
+    int numOfStuffingOps = 0;
     int nBytesBuf = 0;
     int counter = 0;
     int msg_counter = 0;
@@ -95,6 +98,8 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
     unsigned char calculatedBCC2 = 0;
     int retransmissionCount = 0;
     STOP = FALSE;    
+    int stuffingActive = FALSE;
+    
 
     unsigned char beforeRcvdByte = 0x0;
 
@@ -267,9 +272,26 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
                         STOP = TRUE;
                     }
                 }
+                else if (byte == STUFFING_BYTE) {
+                    stuffingActive = TRUE;
+                    break;
+                }
+                else if (byte == 0x5e && stuffingActive){
+                    dataBuffer[dataIndex] = FLAG;
+                    // Store byte and update running XOR
+                    calculatedBCC2 ^= FLAG; 
+                    stuffingActive = FALSE;
+                    dataIndex++;
+                }
+                else if (byte == 0x5d && stuffingActive){
+                    dataBuffer[dataIndex] = STUFFING_BYTE;
+                    // Store byte and update running XOR
+                    calculatedBCC2 ^= STUFFING_BYTE; 
+                    stuffingActive = FALSE;
+                    dataIndex++;
+                }
                 else {
-                    dataBuffer[dataIndex] = byte;
-                    
+                    dataBuffer[dataIndex] = byte; 
                     // Store byte and update running XOR
                     calculatedBCC2 ^= byte; 
                     dataIndex++;
@@ -318,7 +340,12 @@ int llclose()
 // PACKET BUILDER
 ////////////////////////////////////////////////
 
-int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSize, const unsigned char * data, int dataSize, LinkLayerRole role){
+int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSize, const unsigned char * data, int dataSize, LinkLayerRole role, int * numStuffs, int * ignoredBytes){
+    
+    unsigned char stuffedBuf[BUF_SIZE] = {0};
+
+    int stuffedBufSize = stuffing(buf, stuffedBuf, bufSize, numStuffs, ignoredBytes);
+    
     switch (messageType)
     {
     case SET_MSG:
@@ -455,6 +482,45 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
 
 void alarmHandler(int signal){
     alarmEnabled = FALSE;
+}
+
+
+int stuffing(const unsigned char * data, unsigned char * buffer, const int dataSize, int * numStuffs, int * ignoredBytes){ //returns number of stuffs
+    
+    int buffSize = 0;
+
+    for(int i = 0 ; i < dataSize ; i++){
+        if(data[i] == F){
+            if(i == dataSize - 1){
+                break;
+            }
+            buffer[i] = STUFFING_BYTE;
+            buffer[++i] = 0x5e;
+            (*numStuffs)++;
+        }
+        else if(data[i] == STUFFING_BYTE){
+            if(i == dataSize - 1){
+                break;
+            }
+            buffer[i] = STUFFING_BYTE;
+            buffer[++i] = 0x5d;
+            (*numStuffs)++;
+        }
+        else {
+            buffer[i] = data[i];
+        }
+        buffSize++;
+    }
+
+    if (dataSize + *numStuffs > BUF_SIZE){
+        *ignoredBytes = *numStuffs;
+    }
+    else {
+        *ignoredBytes = 0;
+    }
+
+    return buffSize;
+
 }
 
 

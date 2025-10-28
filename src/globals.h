@@ -8,6 +8,7 @@
 #define TRUE 1
 #define ACTIVE 2
 
+
 #define BAUDRATE 38400
 #define BUF_SIZE 256
 
@@ -34,6 +35,8 @@
 #define C_RR_1  0xAB  // R 0 0 0 0 1 0 1 - RR (receiver ready / positive ACK) N(r)=1
 #define C_REJ_0 0x54  // R 0 0 0 0 0 0 1 - REJ (reject / negative ACK) N(r)=0
 #define C_REJ_1 0x55  // R 0 0 0 0 0 0 1 - REJ (reject / negative ACK) N(r)=1
+
+#define STUFFING_BYTE 0X7d // 0 1 1 1 1 1 0 1
 
 enum State {
     Start,
@@ -66,7 +69,7 @@ typedef enum
     DisconnectingC,
     OpenC,
     ClosedC,
-    EndC
+    EndC,
 } CommunicationStatus;
 
 
