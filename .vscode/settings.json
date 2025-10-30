@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "*.embeddedhtml": "html",
+        "link_layer.h": "c",
+        "globals.h": "c"
+    }
+}

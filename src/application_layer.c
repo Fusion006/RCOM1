@@ -34,57 +34,88 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     int fd = -1;
     if (link.role == LlTx){
         fd = open(filename, O_RDONLY);
-        if (fd == -1){
+    }
+    else if (link.role == LlRx){
+        fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC, 0644);        
+    }
+    if (fd == -1){
             perror("Error creating file");
             return;
-        }
-        printf("Opened file %s successfully\n");
     }
+
+    printf("Opened file %s successfully\n", filename);
 
     unsigned char data[BUF_SIZE] = {0};
 
-    int dataSize = extractChunk(fd, 0, data);
+    int startIndex = 0;
+    int dataSize = 0;
+
 
     CommunicationStatus communicationStatus = ClosedC;
     MessageType messageRcvd = NO_MSG;
     //variavel controlo 
-    int startIndex = 0;
     while(communicationStatus != EndC){
+        printf("Communication Status : %s\n", comStatus[communicationStatus]);
         if(link.role == LlRx){
-            receiverProcess(link, &communicationStatus, &messageRcvd);
+            receiverProcess(link, &communicationStatus, &messageRcvd, fd);
         }
-        else{ 
-            //transmitterProcess(link, &communicationStatus, &messageRcvd, fd, &startIndex);
+        else{
+            transmitterProcess(link, &communicationStatus, &messageRcvd, fd, &startIndex);
         }
+
     }
 
+    close(fd);
     llclose();
 }
 
+int appendChunk(int fd, const unsigned char* buffer, int length) {
+    if (fd < 0 || buffer == NULL) {
+        return -1;
+    }
+
+    printf("APPENDING CHUNK: \n");
+    for(int i = 0 ; i < length ; i++){
+        printf("%02x ", buffer[i]);
+    }
+    printf("\n");
+
+    if (lseek(fd, 0, SEEK_END) == -1) {
+        perror("Error seeking to end of file");
+        return -1;
+    }
+
+    ssize_t bytesWritten = write(fd, buffer, length);
+    if (bytesWritten < 0) {
+        perror("Error writing to file");
+        return -1;
+    }
+
+    return bytesWritten;
+}
 
 int extractChunk(int fd, int startIndex, unsigned char* buffer) {
     if (fd < 0 || buffer == NULL) {
         return -1;
     }
     
-    // Seek to startIndex position in file
     if (lseek(fd, startIndex, SEEK_SET) == -1) {
         perror("Error seeking file");
         return -1;
     }
     
-    // Read up to BUF_SIZE bytes
-    int bytesRead = read(fd, buffer, BUF_SIZE);
+    int bytesRead = read(fd, buffer, BUF_SIZE - 7); //deixar espaço para flag bcc2
     
     if (bytesRead < 0) {
         perror("Error reading file");
         return -1;
     }
-    
-    // Null-terminate if treating as string (optional, depends on use case)
-    if (bytesRead < BUF_SIZE) {
-        buffer[bytesRead] = '\0';
+
+    printf("DATA TO SEND: \n");
+    for(int i = 0 ; i < bytesRead ; i++){
+        printf("%02x ", buffer[i]);
     }
+    printf("\n");
     
     return bytesRead;
 }
@@ -114,6 +145,7 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
 
     MessageType messageCntrl = *messageRcvd;
     CommunicationStatus communicationStatusCtrl = *communicationStatus;
+    int bytes = 0;
     do {
         timedOut = ACTIVE;
         switch (messageCntrl)
@@ -126,27 +158,71 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
                 break;
             case UA_MSG:
                 if (communicationStatusCtrl == ConnectingC) {
+                    memset(data, 0, BUF_SIZE);
                     dataSize = extractChunk(fd, *startIndex, data);
-                    bytesWritten = llwrite(data, dataSize, I0_MSG, LlTx, &ignoredBytes); //Enviar nome do ficheiro 
-                    *communicationStatus = OpenC;
+                    printf("DATASIZE TO SEND : %d\n", dataSize);
+                    printf("START INDEX : %d\n", *startIndex);
+                    
+                    if(dataSize == 0){
+                        printf("TRANSFERENCE CONCLUDED|\n");
+                        llwrite(data, dataSize, DISC_MSG, LlTx, NULL); 
+                        communicationStatus = DisconnectingC;
+                    }
+                    else {
+                        bytesWritten = llwrite(data, dataSize, I0_MSG, LlTx, &ignoredBytes); //Enviar nome do ficheiro 
+                        *communicationStatus = OpenC;
+                    }
+                    
                 }
                 break;
         
             case RR0_MSG:
                 if (communicationStatusCtrl == OpenC) {
-                    bytesWritten = llwrite(data, dataSize, DISC_MSG /*I1_MSG */, LlTx, &ignoredBytes); //Temporario obviamente
+                    memset(data, 0, BUF_SIZE);
+                    dataSize = extractChunk(fd, *startIndex, data);
+                    printf("DATASIZE TO SEND : %d\n", dataSize);
+                    printf("START INDEX : %d\n", *startIndex);
+                    
+                    if(dataSize == 0){
+                        printf("TRANSFERENCE CONCLUDED|\n");
+                        llwrite(data, dataSize, DISC_MSG, LlTx, NULL); 
+                        *communicationStatus = DisconnectingC;
+                    }
+                    else {
+                        bytesWritten = llwrite(data, dataSize, I1_MSG, LlTx, &ignoredBytes);                 
+                    }   
+                }
+                if (communicationStatusCtrl == DisconnectingC){
+                    llwrite(data, dataSize, DISC_MSG, LlTx, NULL); 
                     *communicationStatus = DisconnectingC;
                 }
+                
                 break;
 
             case RR1_MSG:
                 if (communicationStatusCtrl == OpenC) {
-                    bytesWritten = llwrite(data, dataSize, DISC_MSG /*I0_MSG */, LlRx, &ignoredBytes); //Temporario obviamente
-                    *communicationStatus = DisconnectingC;
+                    memset(data, 0, BUF_SIZE);
+                    dataSize = extractChunk(fd, *startIndex, data);
+                    printf("DATASIZE TO SEND : %d\n", dataSize);
+                    printf("START INDEX : %d\n", *startIndex);
+                    
+                    if(dataSize == 0){
+                        printf("TRANSFERENCE CONCLUDED|\n");
+                        llwrite(data, dataSize, DISC_MSG, LlTx, NULL); 
+                        *communicationStatus = DisconnectingC;
+                    }
+                    else {
+                        bytesWritten = llwrite(data, dataSize, I0_MSG, LlTx, &ignoredBytes);                 
+                    }
+                }
+                if (communicationStatusCtrl == DisconnectingC){
+                    llwrite(data, dataSize, DISC_MSG, LlTx, NULL); 
+                    *communicationStatus = EndC;
                 }
                 break;
             case DISC_MSG:
                 if (communicationStatusCtrl == DisconnectingC){
+                    llwrite(data, dataSize, UA_MSG, LlTx, NULL); 
                     *communicationStatus = EndC;
                 }
                 return 0;
@@ -157,7 +233,7 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
         }
   
     }
-    while (llread(packet, messageRcvd, &timedOut) || timedOut == TRUE);
+    while (llread(packet, messageRcvd, &timedOut, &bytes) || timedOut == TRUE);
 
     *startIndex += dataSize - ignoredBytes;
         
@@ -165,16 +241,17 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
 }
 
 
-int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, MessageType * messaageRcvd){
+int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, MessageType * messaageRcvd, int fd){
     unsigned char data[BUF_SIZE] = {0};
     unsigned char packet[BUF_SIZE] = {0};
     int dataSize = 0;
 
-    printf("Receiver Process Entered\n");        
+    //printf("Receiver Process Entered\n");        
 
 
     int timedOut = FALSE;
-    llread(packet,messaageRcvd,&timedOut); // checkar para o valor de retorno
+    int bytes = 0;
+    llread(packet,messaageRcvd,&timedOut, &bytes); // checkar para o valor de retorno
     
     sleep(1);
 
@@ -190,12 +267,16 @@ int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, M
             break;
         case I0_MSG:
             if (*communicationStatus == OpenC) {
+                appendChunk(fd, packet, bytes);
+                printf("APPENDING %d BYTES\n", bytes);
                 llwrite(data, dataSize, RR0_MSG, LlRx, NULL); 
                 *communicationStatus = OpenC;
             }
             break;
         case I1_MSG:
             if (*communicationStatus == OpenC) {
+                appendChunk(fd, packet, bytes);
+                printf("APPENDING %d BYTES\n", bytes);
                 llwrite(data, dataSize, RR1_MSG, LlRx, NULL); 
                 *communicationStatus = OpenC;
             }

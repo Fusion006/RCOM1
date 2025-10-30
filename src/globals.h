@@ -69,12 +69,13 @@ typedef enum
     DisconnectingC,
     OpenC,
     ClosedC,
-    EndC,
+    EndC
 } CommunicationStatus;
 
 
 extern const char* states[];
 extern const char* msgs_[];
+extern const char * comStatus[];
 
 extern int expectedFrameNumber;
 

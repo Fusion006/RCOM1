@@ -43,11 +43,9 @@ int llwrite(const unsigned char *data, int dataSize, const MessageType messageTy
 
     printf("\nSending message: %s\n\n", msgs_[messageType]);
 
-    const unsigned char * teste_buf = "MENSAGEM_TESTE";
-
-    if(messageType == I0_MSG){
-        if(!packetBuilder(messageType, buf, 20, teste_buf, 14, linkLayerRole, &numStuffs, ignoredBytes)){
-            bytes = writeBytesSerialPort(buf, BUF_SIZE);
+    if(messageType == I0_MSG || messageType == I1_MSG){
+        if(!packetBuilder(messageType, buf, BUF_SIZE, data, dataSize, linkLayerRole, &numStuffs, ignoredBytes)){
+            bytes = writeBytesSerialPort(buf, dataSize + 6);
         }
     }
     else {
@@ -63,7 +61,7 @@ int llwrite(const unsigned char *data, int dataSize, const MessageType messageTy
 ////////////////////////////////////////////////
 // LLREAD
 ////////////////////////////////////////////////
-int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
+int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int * bytes)
 {
 
     int alarmActive = FALSE;
@@ -80,12 +78,12 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
         alarmEnabled = TRUE;
         alarmActive = TRUE;
 
-        printf("Alarm configured\n");
+        //printf("Alarm configured\n");
 
         *timedOut = FALSE; 
     }
 
-    printf("llread entered \n");
+    //printf("llread entered \n");
     int numOfStuffingOps = 0;
     int nBytesBuf = 0;
     int counter = 0;
@@ -93,7 +91,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
     enum State currentState = Start;
     unsigned char receivedA = 0;
     unsigned char receivedC = 0;
-    unsigned char dataBuffer[MAX_PAYLOAD_SIZE] = {0};
+    unsigned char dataBuffer[BUF_SIZE + 1] = {0};
     int dataIndex = 0;
     unsigned char calculatedBCC2 = 0;
     int retransmissionCount = 0;
@@ -105,11 +103,11 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
 
     while(STOP == FALSE && (alarmActive == alarmEnabled)){
         unsigned char byte;
-        int bytes = readByteSerialPort(&byte);            
-        nBytesBuf += bytes;
+        int nBytes = readByteSerialPort(&byte);            
+        nBytesBuf += nBytes;
 
-        printf("Current State : %s\n", states[currentState]);
-        printf("Byte received: 0x%02X\n", byte);
+        //printf("Current State : %s\n", states[currentState]);
+        //printf("Byte received: 0x%02X\n", byte);
         
 
         switch(currentState){
@@ -140,11 +138,11 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
                             byte == C_REJ_0 || byte == C_REJ_1 ||
                             byte == C_I_0 || byte == C_I_1) {
                     receivedC = byte;
-                    printf("Control field received: 0x%02X\n", byte);
+                    //printf("Control field received: 0x%02X\n", byte);
                     currentState = C;
                 }
                 else {
-                    printf("Unknown control field: 0x%02X, ignoring frame\n", byte);
+                    //printf("Unknown control field: 0x%02X, ignoring frame\n", byte);
                     currentState = Start;
                 }
                 break;
@@ -154,19 +152,19 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
                     currentState = FLAG;
                 }
                 else if (byte == (receivedA ^ receivedC)) {
-                    printf("BCC1 correct!\n");
+                    //printf("BCC1 correct!\n");
                     
                     // Determine frame type and expected structure
                     if (receivedC == C_I_0 || receivedC == C_I_1) {
                         // Information frame - expect data field
-                        printf("I-frame detected, expecting data field\n");
+                      //  printf("I-frame detected, expecting data field\n");
                         currentState = BCC1;
                     }
                     else if (receivedC == C_SET || receivedC == C_DISC || receivedC == C_UA ||
                                 receivedC == C_RR_0 || receivedC == C_RR_1 ||
                                 receivedC == C_REJ_0 || receivedC == C_REJ_1) {
                         // Supervision frame - no data field expected
-                        printf("Supervision frame detected, no data field\n");
+                        //printf("Supervision frame detected, no data field\n");
                         currentState = BCC1;
                     }
                     else {
@@ -174,8 +172,8 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
                     }
                 }
                 else {
-                    printf("BCC1 error! Expected 0x%02X, got 0x%02X\n", (receivedA ^ receivedC), byte);
-                    printf("Header error detected - ignoring frame without action\n");
+                    //printf("BCC1 error! Expected 0x%02X, got 0x%02X\n", (receivedA ^ receivedC), byte);
+                    //printf("Header error detected - ignoring frame without action\n");
                     // According to procedures: frames with wrong header are ignored
                     currentState = Start;
                 }
@@ -184,20 +182,20 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
             case BCC1:
                 if (byte == F) {
                     // Frame complete - this is a supervision frame (no data field)
-                    printf("Supervision frame complete\n");
+                    //printf("Supervision frame complete\n");
                     
                     // Process supervision frames
                     if (receivedC == C_SET) {
-                        printf("SET received - sending UA response\n");
+                        //printf("SET received - sending UA response\n");
                         *messageRcvd = SET_MSG;
                     }
                     else if (receivedC == C_DISC) {
-                        printf("DISC received - sending DISC then UA response\n");
+                        //printf("DISC received - sending DISC then UA response\n");
                         *messageRcvd = DISC_MSG;
                     }
                     else if (receivedC == C_UA) {
                         *messageRcvd = UA_MSG;
-                        printf("UA received - acknowledgment confirmed\n");
+                        //printf("UA received - acknowledgment confirmed\n");
                     }
                     else if (receivedC == C_RR_0 || receivedC == C_RR_1) {
                         int ackFrame = (receivedC == C_RR_1) ? 1 : 0;
@@ -207,11 +205,11 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
                         else {
                             *messageRcvd = RR1_MSG;
                         }
-                        printf("RR(%d) received - positive acknowledgment\n", ackFrame);
+                        //printf("RR(%d) received - positive acknowledgment\n", ackFrame);
                     }
                     else if (receivedC == C_REJ_0 || receivedC == C_REJ_1) {
                         int rejFrame = (receivedC == C_REJ_1) ? 1 : 0;
-                        printf("REJ(%d) received - retransmission requested\n", rejFrame);
+                        //printf("REJ(%d) received - retransmission requested\n", rejFrame);
                     }
                     
                     STOP = TRUE;
@@ -226,14 +224,15 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
                         else if(receivedC == C_I_1){
                             *messageRcvd =  I1_MSG;
                         }
-                        printf("Starting data reception for I-frame\n");
+                        //printf("Starting data reception for I-frame\n");
                         dataBuffer[dataIndex++] = byte;
-                        calculatedBCC2 = byte;
+                        calculatedBCC2 ^= byte;
+                        printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, byte);
                         currentState = DATA;
                     }
                     else {
                         // Supervision frame shouldn't have data - error
-                        printf("Error: Supervision frame has data field!\n");
+                        //printf("Error: Supervision frame has data field!\n");
                         currentState = Start; 
                         // STOP = TRUE;
                         // *messageRcvd = INVALID_MSG;
@@ -245,41 +244,37 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
             case DATA:
                 if (byte == F) {
                     calculatedBCC2 ^= beforeRcvdByte;
+                    printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, beforeRcvdByte);
+
 
                     printf("\nReceived BCC2 : %#08x\n",beforeRcvdByte);
                     printf("Calculated BCC2 : %#08x\n",calculatedBCC2);
 
 
-                    dataBuffer[dataIndex] = 0x00;
                     dataIndex--;
+                    printf("SETTING %02x TO 0\n", dataBuffer[dataIndex]);
+                    dataBuffer[dataIndex] = 0;
 
                     if (beforeRcvdByte == calculatedBCC2) {
-                        printf("Correct BCC2\n");
-
-                        for (int i = 0 ; i < dataIndex ; i++){
-                            printf("\nRECEIVED BUFFER %d : %#08x\n", i, dataBuffer[i]);
-                        }
-
+                        printf("Correct BCC2\n");                        
+                        memcpy(packet, dataBuffer, dataIndex);
                         STOP = TRUE;
                     }
                     else {
-                        printf("Incorrect BCC2\n");
-                        
-                        for (int i = 0 ; i < dataIndex ; i++){
-                            printf("\nRECEIVED BUFFER %d : %#08x\n", i, dataBuffer[i]);
-                        }
-                        
+                        printf("Incorrect BCC2\n");  
+                        memcpy(packet, dataBuffer, dataIndex);
                         STOP = TRUE;
                     }
                 }
                 else if (byte == STUFFING_BYTE) {
                     stuffingActive = TRUE;
-                    break;
                 }
                 else if (byte == 0x5e && stuffingActive){
-                    dataBuffer[dataIndex] = FLAG;
+                    dataBuffer[dataIndex] = F;
                     // Store byte and update running XOR
-                    calculatedBCC2 ^= FLAG; 
+                    //printf("XORING %02x\n", F);
+                    calculatedBCC2 ^= F; 
+                    printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, F);
                     stuffingActive = FALSE;
                     dataIndex++;
                 }
@@ -287,13 +282,15 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
                     dataBuffer[dataIndex] = STUFFING_BYTE;
                     // Store byte and update running XOR
                     calculatedBCC2 ^= STUFFING_BYTE; 
+                    printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, STUFFING_BYTE);
                     stuffingActive = FALSE;
                     dataIndex++;
                 }
                 else {
                     dataBuffer[dataIndex] = byte; 
                     // Store byte and update running XOR
-                    calculatedBCC2 ^= byte; 
+                    calculatedBCC2 ^= byte;
+                    printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, byte);
                     dataIndex++;
                 }
                 break;
@@ -308,7 +305,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
         return 0;
     }
 
-    printf("Frame processing complete\n");
+    //printf("Frame processing complete\n");
 
 
 
@@ -316,6 +313,9 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut)
 
     printf("\n\nReceived Message : %s\n\n", msgs_[*messageRcvd]);
     
+    if (bytes != NULL){
+        *bytes = nBytesBuf - 6;
+    }
 
 
     return 0;
@@ -342,9 +342,12 @@ int llclose()
 
 int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSize, const unsigned char * data, int dataSize, LinkLayerRole role, int * numStuffs, int * ignoredBytes){
     
+
+    unsigned char bcc2 = 0;
+
     unsigned char stuffedBuf[BUF_SIZE] = {0};
 
-    int stuffedBufSize = stuffing(buf, stuffedBuf, bufSize, numStuffs, ignoredBytes);
+    int stuffedBufSize = stuffing(data, stuffedBuf, dataSize, numStuffs, ignoredBytes);
     
     switch (messageType)
     {
@@ -352,6 +355,7 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
         if(bufSize < 5){
             return -1;
         }
+
         buf[0] = F;
         if(role == LlTx) buf[1] = A_TX;
         else return -1;
@@ -393,7 +397,6 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
         buf[4] = F;
         break;
     case I0_MSG:
-        printf("PACKET BUILDER I0\n");
         if(dataSize > BUF_SIZE - 6 && bufSize < dataSize + 6){
             return -1;
         }
@@ -404,20 +407,33 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
         buf[3] = buf[1] ^ buf[2];
         
         // Copy data and calculate BCC2
-        buf[4 + dataSize] = 0; // Initialize BCC2 position
-        for(int i = 0 ; i < dataSize ; i++){
-            buf[i + 4] = data[i];
-            buf[4 + dataSize] ^= data[i]; // BCC2 is at position 4 + dataSize
+        for(int i = 0 ; i < stuffedBufSize ; i++){
+            buf[i + 4] = stuffedBuf[i];
+        }
+        buf[4 + stuffedBufSize] = 0; // Initialize BCC2 position
+        for(int i = 0 ; i < dataSize - *ignoredBytes ; i++){
+             bcc2 ^= data[i]; // BCC2 is at position 4 + dataSize
+            printf("TRANSMITTER CALCULATED BCC2 : %02x BY XORING : %02x\n", bcc2, data[i]);
+
+        }
+        if(bcc2 == F){
+            buf[4 + stuffedBufSize] = STUFFING_BYTE;
+            buf[4 + stuffedBufSize + 1] = 0x5e;
+            buf[4 + stuffedBufSize + 2] = F; // Final FLAG after BCC2
+        }
+        else if(bcc2 == STUFFING_BYTE){
+            buf[4 + stuffedBufSize] = STUFFING_BYTE;
+            buf[4 + stuffedBufSize + 1] = 0x5d;
+            buf[4 + stuffedBufSize + 2] = F; // Final FLAG after BCC2
+        }
+        else {
+            buf[4 + stuffedBufSize] = bcc2;
+            buf[4 + stuffedBufSize + 1] = F; // Final FLAG after BCC2
+
         }
 
-        buf[4 + dataSize + 1] = F; // Final FLAG after BCC2
-        printf("\n\nBUFFER I0\n");
-        for (int i = 0 ; i < 6 + dataSize ; i++ ){
-            printf("BUFFER %d : %#08x\n\n",i + 1, buf[i]);
-        }
         break;
     case I1_MSG:
-        printf("PACKET BUILDER I0\n");
         if(dataSize > BUF_SIZE - 6 && bufSize < dataSize + 6){
             return -1;
         }
@@ -428,17 +444,31 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
         buf[3] = buf[1] ^ buf[2];
         
         // Copy data and calculate BCC2
-        buf[4 + dataSize] = 0; // Initialize BCC2 position
-        for(int i = 0 ; i < dataSize ; i++){
-            buf[i + 4] = data[i];
-            buf[4 + dataSize] ^= data[i]; // BCC2 is at position 4 + dataSize
+        for(int i = 0 ; i < stuffedBufSize ; i++){
+            buf[i + 4] = stuffedBuf[i];
+        }
+        buf[4 + stuffedBufSize] = 0; // Initialize BCC2 position
+        for(int i = 0 ; i < dataSize - *ignoredBytes ; i++){
+             bcc2 ^= data[i]; // BCC2 is at position 4 + dataSize
+            printf("TRANSMITTER CALCULATED BCC2 : %02x BY XORING : %02x\n", bcc2, data[i]);
+
+        }
+        if(bcc2 == F){
+            buf[4 + stuffedBufSize] = STUFFING_BYTE;
+            buf[4 + stuffedBufSize + 1] = 0x5e;
+            buf[4 + stuffedBufSize + 2] = F; // Final FLAG after BCC2
+        }
+        else if(bcc2 == STUFFING_BYTE){
+            buf[4 + stuffedBufSize] = STUFFING_BYTE;
+            buf[4 + stuffedBufSize + 1] = 0x5d;
+            buf[4 + stuffedBufSize + 2] = F; // Final FLAG after BCC2
+        }
+        else {
+            buf[4 + stuffedBufSize] = bcc2;
+            buf[4 + stuffedBufSize + 1] = F; // Final FLAG after BCC2
+
         }
 
-        buf[4 + dataSize + 1] = F; // Final FLAG after BCC2
-        printf("\n\nBUFFER I1\n");
-        for (int i = 0 ; i < 6 + dataSize ; i++ ){
-            printf("BUFFER %d : %#08x\n\n",i + 1, buf[i]);
-        }
         break;
     case REJ0_MSG:
         if(bufSize < 5){
@@ -476,7 +506,18 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
     default:
         break;
     }
+    
+   printf("STUFFED BUFFER\n");
+    for (int i = 0 ; i < bufSize ; i++){
+        printf("%02x ", buf[i]);
+    }
+       
 
+    /* printf("STUFFED BUFFER\n");
+    for (int i = 0 ; i < stuffedBufSize ; i++){
+        printf("%02x ", stuffedBuf[i]);
+    } */
+    
     return 0;
 }
 
@@ -489,35 +530,40 @@ int stuffing(const unsigned char * data, unsigned char * buffer, const int dataS
     
     int buffSize = 0;
 
-    for(int i = 0 ; i < dataSize ; i++){
-        if(data[i] == F){
-            if(i == dataSize - 1){
-                break;
-            }
+    for(int i = 0, j = 0 ; i < dataSize && j < dataSize ; i++, j++){
+
+        if(data[j] == F){
             buffer[i] = STUFFING_BYTE;
             buffer[++i] = 0x5e;
             (*numStuffs)++;
+            buffSize++;
         }
-        else if(data[i] == STUFFING_BYTE){
-            if(i == dataSize - 1){
-                break;
-            }
+        else if(data[j] == STUFFING_BYTE){
             buffer[i] = STUFFING_BYTE;
             buffer[++i] = 0x5d;
             (*numStuffs)++;
+            buffSize++;
         }
         else {
-            buffer[i] = data[i];
+            buffer[i] = data[j];
         }
         buffSize++;
     }
 
-    if (dataSize + *numStuffs > BUF_SIZE){
-        *ignoredBytes = *numStuffs;
+    if(ignoredBytes != NULL){
+        if (dataSize + *numStuffs > BUF_SIZE){
+            *ignoredBytes = dataSize + *numStuffs - BUF_SIZE;
+        }
+        else {
+            *ignoredBytes = 0;
+        }
     }
-    else {
-        *ignoredBytes = 0;
-    }
+    
+    //printf("Stuffed Buf Size : %d\n", buffSize);
+
+    //printf("STUFFED BUF : %s\n", buffer);
+
+    printf("NUM STUFFS : %d\n", *numStuffs);
 
     return buffSize;
 

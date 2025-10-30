@@ -42,7 +42,7 @@ int llwrite(const unsigned char *data, int dataSize, const MessageType messageTy
 
 // Receive data in packet.
 // Return number of chars read, or -1 on error.     // Para já está a devolver que mensagem recebeu
-int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut);
+int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int * bytes);
 
 // Close previously opened connection and print transmission statistics in the console.
 // Return 0 on success or -1 on error.
