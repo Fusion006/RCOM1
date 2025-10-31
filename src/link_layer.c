@@ -53,6 +53,8 @@ int llwrite(const unsigned char *data, int dataSize, const MessageType messageTy
             bytes = writeBytesSerialPort(buf, 5);
         }
     }
+
+    sleep(1);
     
 
     return bytes;
@@ -209,6 +211,12 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                     }
                     else if (receivedC == C_REJ_0 || receivedC == C_REJ_1) {
                         int rejFrame = (receivedC == C_REJ_1) ? 1 : 0;
+                        if(receivedC == C_REJ_0){
+                            *messageRcvd = REJ0_MSG;
+                        }
+                        else if(receivedC == C_REJ_1){
+                            *messageRcvd = REJ1_MSG;
+                        }
                         //printf("REJ(%d) received - retransmission requested\n", rejFrame);
                     }
                     
@@ -257,6 +265,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                     nBytesBuf--;
 
                     if (beforeRcvdByte == calculatedBCC2) {
+                        memset(packet, 0, BUF_SIZE);
                         printf("Correct BCC2\n");                        
                         memcpy(packet, dataBuffer, dataIndex);
                         STOP = TRUE;
@@ -515,25 +524,28 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
     }
     
    
-   /*printf("STUFFED BUFFER\n");
+   printf("STUFFED BUFFER\n");
     for (int i = 0 ; i < bufSize ; i++){
         printf("%02x ", buf[i]);
     }
-        */
+    printf("\n");
+        
    
        
 
-    /*
-    printf("STUFFED DATA\n");
-    for (int i = 0 ; i < stuffedBufSize ; i++){
-        printf("%02x ", stuffedBuf[i]);
+    
+    printf("DATA TO STUFF\n");
+    for (int i = 0 ; i < dataSize ; i++){
+        printf("%02x ", data[i]);
     }
-        */ 
+    printf("\n");
+         
     
     return 0;
 }
 
 void alarmHandler(int signal){
+    printf("TIME OUT!\n");
     alarmEnabled = FALSE;
 }
 
@@ -562,6 +574,8 @@ int stuffing(const unsigned char * data, unsigned char * buffer, const int dataS
         }
         buffSize++;
     }
+    //checkar para erro stuffing final
+    
 
     if(ignoredBytes != NULL){
         if (dataSize + *numStuffs > BUF_SIZE - 7){
@@ -571,6 +585,9 @@ int stuffing(const unsigned char * data, unsigned char * buffer, const int dataS
         else {
             printf("IGNORED BYTES : %d\n", *ignoredBytes);
             *ignoredBytes = 0;
+        }
+        if(data[dataSize - *ignoredBytes] == F || data[dataSize - *ignoredBytes] == STUFFING_BYTE){
+            *ignoredBytes -= 1;
         }
     }
     else {

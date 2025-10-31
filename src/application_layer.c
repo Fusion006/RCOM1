@@ -76,12 +76,12 @@ int appendChunk(int fd, const unsigned char* buffer, int length) {
     }
 
     
-    /*printf("APPENDING CHUNK: \n");
+    printf("APPENDING CHUNK: \n");
     for(int i = 0 ; i < length ; i++){
         printf("%02x ", buffer[i]);
     }
     printf("\n");
-    */
+    
 
     if (lseek(fd, 0, SEEK_END) == -1) {
         perror("Error seeking to end of file");
@@ -114,13 +114,12 @@ int extractChunk(int fd, int startIndex, unsigned char* buffer) {
         return -1;
     }
 
-    /*
     printf("DATA TO SEND: \n");
     for(int i = 0 ; i < bytesRead ; i++){
         printf("%02x ", buffer[i]);
     }
     printf("\n");
-    */
+
     return bytesRead;
 }
 
@@ -151,7 +150,14 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
     CommunicationStatus communicationStatusCtrl = *communicationStatus;
     int bytes = 0;
     do {
+        if(timedOut == TRUE){
+            *startIndex = *controlIndex;
+        }
         timedOut = ACTIVE;
+        
+        printf("START INDEX : %d\n", *startIndex);
+        printf("CONTROL INDEX : %d\n", *controlIndex);
+        
         switch (messageCntrl)
         {
             case NO_MSG:
@@ -165,7 +171,6 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
                     memset(data, 0, BUF_SIZE);
                     dataSize = extractChunk(fd, *startIndex, data);
                     printf("DATASIZE TO SEND : %d\n", dataSize);
-                    printf("START INDEX : %d\n", *startIndex);
                     
                     if(dataSize == 0){
                         printf("TRANSFERENCE CONCLUDED|\n");
@@ -181,16 +186,12 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
                 break;
         
             case RR0_MSG:
-
-                if(timedOut == TRUE){
-                    printf("TIME OUT!\n\n");
-                    *startIndex = *controlIndex;        
-                }
+                *controlIndex = *startIndex;
+                
                 if (communicationStatusCtrl == OpenC) {
                     memset(data, 0, BUF_SIZE);
                     dataSize = extractChunk(fd, *startIndex, data);
                     printf("DATASIZE TO SEND : %d\n", dataSize);
-                    printf("START INDEX : %d\n", *startIndex);
                     
                     if(dataSize == 0){
                         printf("TRANSFERENCE CONCLUDED|\n");
@@ -199,7 +200,6 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
                     }
                     else {
                         bytesWritten = llwrite(data, dataSize, I1_MSG, LlTx, &ignoredBytes);   
-                        *controlIndex = *startIndex;
                         *startIndex += dataSize - ignoredBytes;
 
                     }   
@@ -212,15 +212,12 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
                 break;
 
             case RR1_MSG:
-                if(timedOut == TRUE){
-                    printf("TIME OUT!\n\n");
-                    *startIndex = *controlIndex;        
-                }
+                *controlIndex = *startIndex;
+                
                 if (communicationStatusCtrl == OpenC) {
                     memset(data, 0, BUF_SIZE);
                     dataSize = extractChunk(fd, *startIndex, data);
                     printf("DATASIZE TO SEND : %d\n", dataSize);
-                    printf("START INDEX : %d\n", *startIndex);
                     
                     if(dataSize == 0){
                         printf("TRANSFERENCE CONCLUDED|\n");
@@ -229,7 +226,6 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
                     }
                     else {
                         bytesWritten = llwrite(data, dataSize, I0_MSG, LlTx, &ignoredBytes);                 
-                        *controlIndex = *startIndex;
                         *startIndex += dataSize - ignoredBytes;
                     }
                 }
@@ -284,8 +280,6 @@ int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, M
     int timedOut = FALSE;
     int bytes = 0;
     llread(packet,messaageRcvd,&timedOut, &bytes); // checkar para o valor de retorno
-    
-    sleep(1);
 
     switch (*messaageRcvd)
     {
