@@ -551,8 +551,9 @@ int stuffing(const unsigned char * data, unsigned char * buffer, const int dataS
     }
 
     if(ignoredBytes != NULL){
-        if (dataSize + *numStuffs > BUF_SIZE){
-            *ignoredBytes = dataSize + *numStuffs - BUF_SIZE;
+        if (dataSize + *numStuffs > BUF_SIZE - 6){
+            *ignoredBytes = dataSize + *numStuffs - BUF_SIZE - 6;
+            printf("IGNORED BYTES : %d\n", *ignoredBytes);
         }
         else {
             *ignoredBytes = 0;
@@ -564,6 +565,7 @@ int stuffing(const unsigned char * data, unsigned char * buffer, const int dataS
     //printf("STUFFED BUF : %s\n", buffer);
 
     printf("NUM STUFFS : %d\n", *numStuffs);
+
 
     return buffSize;
 
