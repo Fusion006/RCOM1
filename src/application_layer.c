@@ -151,6 +151,7 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
     int bytes = 0;
     do {
         if(timedOut == TRUE){
+            printf("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n");
             *startIndex = *controlIndex;
         }
         timedOut = ACTIVE;
@@ -179,6 +180,7 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
                     }
                     else {
                         bytesWritten = llwrite(data, dataSize, I0_MSG, LlTx, &ignoredBytes); //Enviar nome do ficheiro 
+                        *startIndex += dataSize - ignoredBytes;
                         *communicationStatus = OpenC;
                     }
                     
