@@ -74,11 +74,13 @@ int appendChunk(int fd, const unsigned char* buffer, int length) {
         return -1;
     }
 
+    
     printf("APPENDING CHUNK: \n");
     for(int i = 0 ; i < length ; i++){
         printf("%02x ", buffer[i]);
     }
     printf("\n");
+    
 
     if (lseek(fd, 0, SEEK_END) == -1) {
         perror("Error seeking to end of file");

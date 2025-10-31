@@ -254,6 +254,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                     dataIndex--;
                     printf("SETTING %02x TO 0\n", dataBuffer[dataIndex]);
                     dataBuffer[dataIndex] = 0;
+                    nBytesBuf--;
 
                     if (beforeRcvdByte == calculatedBCC2) {
                         printf("Correct BCC2\n");                        
@@ -413,7 +414,7 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
         buf[4 + stuffedBufSize] = 0; // Initialize BCC2 position
         for(int i = 0 ; i < dataSize - *ignoredBytes ; i++){
              bcc2 ^= data[i]; // BCC2 is at position 4 + dataSize
-            printf("TRANSMITTER CALCULATED BCC2 : %02x BY XORING : %02x\n", bcc2, data[i]);
+            //printf("TRANSMITTER CALCULATED BCC2 : %02x BY XORING : %02x\n", bcc2, data[i]);
 
         }
         if(bcc2 == F){
@@ -450,7 +451,7 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
         buf[4 + stuffedBufSize] = 0; // Initialize BCC2 position
         for(int i = 0 ; i < dataSize - *ignoredBytes ; i++){
              bcc2 ^= data[i]; // BCC2 is at position 4 + dataSize
-            printf("TRANSMITTER CALCULATED BCC2 : %02x BY XORING : %02x\n", bcc2, data[i]);
+            //printf("TRANSMITTER CALCULATED BCC2 : %02x BY XORING : %02x\n", bcc2, data[i]);
 
         }
         if(bcc2 == F){
@@ -551,13 +552,18 @@ int stuffing(const unsigned char * data, unsigned char * buffer, const int dataS
     }
 
     if(ignoredBytes != NULL){
-        if (dataSize + *numStuffs > BUF_SIZE - 6){
-            *ignoredBytes = dataSize + *numStuffs - BUF_SIZE - 6;
+        if (dataSize + *numStuffs > BUF_SIZE - 7){
+            *ignoredBytes = dataSize + *numStuffs - BUF_SIZE + 7;
             printf("IGNORED BYTES : %d\n", *ignoredBytes);
         }
         else {
+            printf("IGNORED BYTES : %d\n", *ignoredBytes);
             *ignoredBytes = 0;
         }
+    }
+    else {
+        printf("IGNORED BYTES : NULL PTR\n");
+
     }
     
     //printf("Stuffed Buf Size : %d\n", buffSize);
