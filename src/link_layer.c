@@ -227,7 +227,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                         //printf("Starting data reception for I-frame\n");
                         dataBuffer[dataIndex++] = byte;
                         calculatedBCC2 ^= byte;
-                        printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, byte);
+                      //  printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, byte);
                         currentState = DATA;
                     }
                     else {
@@ -244,7 +244,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
             case DATA:
                 if (byte == F) {
                     calculatedBCC2 ^= beforeRcvdByte;
-                    printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, beforeRcvdByte);
+                    //printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, beforeRcvdByte);
 
 
                     printf("\nReceived BCC2 : %#08x\n",beforeRcvdByte);
@@ -263,7 +263,12 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                     }
                     else {
                         printf("Incorrect BCC2\n");  
-                        memcpy(packet, dataBuffer, dataIndex);
+                        if(*messageRcvd == I0_MSG){
+                            *messageRcvd = INVALID_I0;
+                        }
+                        else if(*messageRcvd == I1_MSG){
+                            *messageRcvd = INVALID_I1;
+                        }
                         STOP = TRUE;
                     }
                 }
@@ -275,7 +280,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                     // Store byte and update running XOR
                     //printf("XORING %02x\n", F);
                     calculatedBCC2 ^= F; 
-                    printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, F);
+                    //printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, F);
                     stuffingActive = FALSE;
                     dataIndex++;
                 }
@@ -283,7 +288,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                     dataBuffer[dataIndex] = STUFFING_BYTE;
                     // Store byte and update running XOR
                     calculatedBCC2 ^= STUFFING_BYTE; 
-                    printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, STUFFING_BYTE);
+                    //printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, STUFFING_BYTE);
                     stuffingActive = FALSE;
                     dataIndex++;
                 }
@@ -291,7 +296,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                     dataBuffer[dataIndex] = byte; 
                     // Store byte and update running XOR
                     calculatedBCC2 ^= byte;
-                    printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, byte);
+                    //printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, byte);
                     dataIndex++;
                 }
                 break;
@@ -302,7 +307,6 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
 
     if (alarmActive && !alarmEnabled){
         *timedOut = TRUE;
-        printf("TIME OUT!\n\n");
         return 0;
     }
 
@@ -349,6 +353,8 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
     unsigned char stuffedBuf[BUF_SIZE] = {0};
 
     int stuffedBufSize = stuffing(data, stuffedBuf, dataSize, numStuffs, ignoredBytes);
+
+    printf("STUFFED BUF SIZE %d \n",stuffedBufSize);
     
     switch (messageType)
     {
@@ -508,16 +514,21 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
         break;
     }
     
-   printf("STUFFED BUFFER\n");
+   
+   /*printf("STUFFED BUFFER\n");
     for (int i = 0 ; i < bufSize ; i++){
         printf("%02x ", buf[i]);
     }
+        */
+   
        
 
-    /* printf("STUFFED BUFFER\n");
+    /*
+    printf("STUFFED DATA\n");
     for (int i = 0 ; i < stuffedBufSize ; i++){
         printf("%02x ", stuffedBuf[i]);
-    } */
+    }
+        */ 
     
     return 0;
 }
@@ -531,7 +542,8 @@ int stuffing(const unsigned char * data, unsigned char * buffer, const int dataS
     
     int buffSize = 0;
 
-    for(int i = 0, j = 0 ; i < dataSize && j < dataSize ; i++, j++){
+
+    for(int i = 0, j = 0 ; i < BUF_SIZE - 7 && j < dataSize ; i++, j++){
 
         if(data[j] == F){
             buffer[i] = STUFFING_BYTE;

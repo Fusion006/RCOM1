@@ -60,7 +60,9 @@ typedef enum {
     REJ1_MSG,
     DISC_MSG,
     INVALID_MSG,
-    NO_MSG
+    NO_MSG,
+    INVALID_I0,
+    INVALID_I1
 } MessageType;
 
 typedef enum 
