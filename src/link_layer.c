@@ -251,6 +251,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                 
             case DATA:
                 if (byte == F) {
+                    /*
                     calculatedBCC2 ^= beforeRcvdByte;
                     //printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, beforeRcvdByte);
 
@@ -268,6 +269,26 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                         memset(packet, 0, BUF_SIZE);
                         printf("Correct BCC2\n");                        
                         memcpy(packet, dataBuffer, dataIndex);
+                        STOP = TRUE;
+                    }*/
+
+                    dataIndex--; // dataIndex now points to the BCC2 byte in dataBuffer
+                    calculatedBCC2 ^= dataBuffer[dataIndex]; // UN-XOR the BCC2 byte
+
+                    unsigned char receivedBCC2 = dataBuffer[dataIndex];
+                    
+                    printf("\nReceived BCC2 : %#08x\n", receivedBCC2);
+                    printf("Calculated BCC2 : %#08x\n", calculatedBCC2);
+
+                    dataBuffer[dataIndex] = 0; // Clear the BCC2 slot in the buffer
+                    nBytesBuf--; // Decrease total bytes read count
+
+                    if (receivedBCC2 == calculatedBCC2) { // Check the UN-XORed BCC2
+                        // Success: dataBuffer contains only data bytes up to dataIndex - 1
+                        memset(packet, 0, BUF_SIZE);
+                        printf("Correct BCC2\n");
+                        memcpy(packet, dataBuffer, dataIndex); // Copy the data (excluding the BCC2)
+                        *bytes = dataIndex; // Update the number of actual data bytes received
                         STOP = TRUE;
                     }
                     else {
@@ -326,10 +347,10 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
     printf("Total bytes received: %d\n", nBytesBuf);
 
     printf("\n\nReceived Message : %s\n\n", msgs_[*messageRcvd]);
-    
+    /*
     if (bytes != NULL){
         *bytes = nBytesBuf - 6;
-    }
+    }*/
 
 
     return 0;
@@ -533,13 +554,13 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
    
        
 
-    
+    /*
     printf("DATA TO STUFF\n");
     for (int i = 0 ; i < dataSize ; i++){
         printf("%02x ", data[i]);
     }
     printf("\n");
-         
+         */
     
     return 0;
 }
