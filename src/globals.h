@@ -38,6 +38,23 @@
 
 #define STUFFING_BYTE 0X7d // 0 1 1 1 1 1 0 1
 
+
+typedef enum
+{
+    LlTx,
+    LlRx,
+} LinkLayerRole;
+
+typedef struct
+{
+    char serialPort[50];
+    LinkLayerRole role;
+    int baudRate;
+    int nRetransmissions;
+    int timeout;
+} LinkLayer;
+
+
 enum State {
     Start,
     FLAG,

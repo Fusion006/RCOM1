@@ -80,12 +80,9 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
         alarmEnabled = TRUE;
         alarmActive = TRUE;
 
-        //printf("Alarm configured\n");
-
         *timedOut = FALSE; 
     }
 
-    //printf("llread entered \n");
     int numOfStuffingOps = 0;
     int nBytesBuf = 0;
     int counter = 0;
@@ -109,7 +106,6 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
         nBytesBuf += nBytes;
 
         //printf("Current State : %s\n", states[currentState]);
-        //printf("Byte received: 0x%02X\n", byte);
         
 
         switch(currentState){
@@ -140,11 +136,9 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                             byte == C_REJ_0 || byte == C_REJ_1 ||
                             byte == C_I_0 || byte == C_I_1) {
                     receivedC = byte;
-                    //printf("Control field received: 0x%02X\n", byte);
                     currentState = C;
                 }
                 else {
-                    //printf("Unknown control field: 0x%02X, ignoring frame\n", byte);
                     currentState = Start;
                 }
                 break;
@@ -159,14 +153,11 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                     // Determine frame type and expected structure
                     if (receivedC == C_I_0 || receivedC == C_I_1) {
                         // Information frame - expect data field
-                      //  printf("I-frame detected, expecting data field\n");
                         currentState = BCC1;
                     }
                     else if (receivedC == C_SET || receivedC == C_DISC || receivedC == C_UA ||
                                 receivedC == C_RR_0 || receivedC == C_RR_1 ||
                                 receivedC == C_REJ_0 || receivedC == C_REJ_1) {
-                        // Supervision frame - no data field expected
-                        //printf("Supervision frame detected, no data field\n");
                         currentState = BCC1;
                     }
                     else {
@@ -174,8 +165,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                     }
                 }
                 else {
-                    //printf("BCC1 error! Expected 0x%02X, got 0x%02X\n", (receivedA ^ receivedC), byte);
-                    //printf("Header error detected - ignoring frame without action\n");
+                    printf("BCC1 error! Expected 0x%02X, got 0x%02X\n", (receivedA ^ receivedC), byte);
                     // According to procedures: frames with wrong header are ignored
                     currentState = Start;
                 }
@@ -184,20 +174,16 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
             case BCC1:
                 if (byte == F) {
                     // Frame complete - this is a supervision frame (no data field)
-                    //printf("Supervision frame complete\n");
                     
                     // Process supervision frames
                     if (receivedC == C_SET) {
-                        //printf("SET received - sending UA response\n");
                         *messageRcvd = SET_MSG;
                     }
                     else if (receivedC == C_DISC) {
-                        //printf("DISC received - sending DISC then UA response\n");
                         *messageRcvd = DISC_MSG;
                     }
                     else if (receivedC == C_UA) {
                         *messageRcvd = UA_MSG;
-                        //printf("UA received - acknowledgment confirmed\n");
                     }
                     else if (receivedC == C_RR_0 || receivedC == C_RR_1) {
                         int ackFrame = (receivedC == C_RR_1) ? 1 : 0;
@@ -207,7 +193,6 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                         else {
                             *messageRcvd = RR1_MSG;
                         }
-                        //printf("RR(%d) received - positive acknowledgment\n", ackFrame);
                     }
                     else if (receivedC == C_REJ_0 || receivedC == C_REJ_1) {
                         int rejFrame = (receivedC == C_REJ_1) ? 1 : 0;
@@ -217,7 +202,6 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                         else if(receivedC == C_REJ_1){
                             *messageRcvd = REJ1_MSG;
                         }
-                        //printf("REJ(%d) received - retransmission requested\n", rejFrame);
                     }
                     
                     STOP = TRUE;
@@ -232,45 +216,18 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                         else if(receivedC == C_I_1){
                             *messageRcvd =  I1_MSG;
                         }
-                        //printf("Starting data reception for I-frame\n");
                         dataBuffer[dataIndex++] = byte;
                         calculatedBCC2 ^= byte;
-                      //  printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, byte);
                         currentState = DATA;
                     }
                     else {
-                        // Supervision frame shouldn't have data - error
-                        //printf("Error: Supervision frame has data field!\n");
                         currentState = Start; 
-                        // STOP = TRUE;
-                        // *messageRcvd = INVALID_MSG;
-                        // printf("Frame processing terminated due to error\n");
                     }
                 }
                 break;
                 
             case DATA:
                 if (byte == F) {
-                    /*
-                    calculatedBCC2 ^= beforeRcvdByte;
-                    //printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, beforeRcvdByte);
-
-
-                    printf("\nReceived BCC2 : %#08x\n",beforeRcvdByte);
-                    printf("Calculated BCC2 : %#08x\n",calculatedBCC2);
-
-
-                    dataIndex--;
-                    printf("SETTING %02x TO 0\n", dataBuffer[dataIndex]);
-                    dataBuffer[dataIndex] = 0;
-                    nBytesBuf--;
-
-                    if (beforeRcvdByte == calculatedBCC2) {
-                        memset(packet, 0, BUF_SIZE);
-                        printf("Correct BCC2\n");                        
-                        memcpy(packet, dataBuffer, dataIndex);
-                        STOP = TRUE;
-                    }*/
 
                     dataIndex--; // dataIndex now points to the BCC2 byte in dataBuffer
                     calculatedBCC2 ^= dataBuffer[dataIndex]; // UN-XOR the BCC2 byte
@@ -308,9 +265,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                 else if (byte == 0x5e && stuffingActive){
                     dataBuffer[dataIndex] = F;
                     // Store byte and update running XOR
-                    //printf("XORING %02x\n", F);
                     calculatedBCC2 ^= F; 
-                    //printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, F);
                     stuffingActive = FALSE;
                     dataIndex++;
                 }
@@ -318,15 +273,12 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
                     dataBuffer[dataIndex] = STUFFING_BYTE;
                     // Store byte and update running XOR
                     calculatedBCC2 ^= STUFFING_BYTE; 
-                    //printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, STUFFING_BYTE);
                     stuffingActive = FALSE;
                     dataIndex++;
                 }
                 else {
                     dataBuffer[dataIndex] = byte; 
-                    // Store byte and update running XOR
                     calculatedBCC2 ^= byte;
-                    //printf("CALCULATED BCC2 : %02x BY XORING : %02x\n", calculatedBCC2, byte);
                     dataIndex++;
                 }
                 break;
@@ -340,18 +292,10 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
         return 0;
     }
 
-    //printf("Frame processing complete\n");
-
-
 
     printf("Total bytes received: %d\n", nBytesBuf);
 
     printf("\n\nReceived Message : %s\n\n", msgs_[*messageRcvd]);
-    /*
-    if (bytes != NULL){
-        *bytes = nBytesBuf - 6;
-    }*/
-
 
     return 0;
 }
@@ -487,8 +431,6 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
         buf[4 + stuffedBufSize] = 0; // Initialize BCC2 position
         for(int i = 0 ; i < dataSize - *ignoredBytes ; i++){
              bcc2 ^= data[i]; // BCC2 is at position 4 + dataSize
-            //printf("TRANSMITTER CALCULATED BCC2 : %02x BY XORING : %02x\n", bcc2, data[i]);
-
         }
         if(bcc2 == F){
             buf[4 + stuffedBufSize] = STUFFING_BYTE;
@@ -503,7 +445,6 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
         else {
             buf[4 + stuffedBufSize] = bcc2;
             buf[4 + stuffedBufSize + 1] = F; // Final FLAG after BCC2
-
         }
 
         break;
@@ -543,25 +484,7 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
     default:
         break;
     }
-    
-   
-   printf("STUFFED BUFFER\n");
-    for (int i = 0 ; i < bufSize ; i++){
-        printf("%02x ", buf[i]);
-    }
-    printf("\n");
         
-   
-       
-
-    /*
-    printf("DATA TO STUFF\n");
-    for (int i = 0 ; i < dataSize ; i++){
-        printf("%02x ", data[i]);
-    }
-    printf("\n");
-         */
-    
     return 0;
 }
 
@@ -615,10 +538,7 @@ int stuffing(const unsigned char * data, unsigned char * buffer, const int dataS
         printf("IGNORED BYTES : NULL PTR\n");
 
     }
-    
-    //printf("Stuffed Buf Size : %d\n", buffSize);
 
-    //printf("STUFFED BUF : %s\n", buffer);
 
     printf("NUM STUFFS : %d\n", *numStuffs);
 

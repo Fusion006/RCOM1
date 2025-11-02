@@ -76,14 +76,6 @@ int appendChunk(int fd, const unsigned char* buffer, int length) {
         return -1;
     }
 
-    
-    printf("APPENDING CHUNK: \n");
-    for(int i = 0 ; i < length ; i++){
-        printf("%02x ", buffer[i]);
-    }
-    printf("\n");
-    
-
     if (lseek(fd, 0, SEEK_END) == -1) {
         perror("Error seeking to end of file");
         return -1;
@@ -108,34 +100,16 @@ int extractChunk(int fd, int startIndex, unsigned char* buffer) {
         return -1;
     }
     
-    int bytesRead = read(fd, buffer, BUF_SIZE - 7); //deixar espaço para flag bcc2
+    int bytesRead = read(fd, buffer, BUF_SIZE - 7); // space to stuff bcc2
     
     if (bytesRead < 0) {
         perror("Error reading file");
         return -1;
     }
 
-    printf("DATA TO SEND: \n");
-    for(int i = 0 ; i < bytesRead ; i++){
-        printf("%02x ", buffer[i]);
-    }
-    printf("\n");
-
     return bytesRead;
 }
 
-
-
-int createFile(const char *filename) {
-    int fd = open(filename, O_CREAT | O_WRONLY | O_TRUNC, 0644);
-    
-    if (fd == -1) {
-        perror("Error creating file");
-        return -1;
-    }
-
-    return fd;
-}
 
 int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus, MessageType * messageRcvd, int fd, int * startIndex, int * controlIndex){
 
@@ -201,7 +175,7 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
                         *communicationStatus = DisconnectingC;
                     }
                     else {
-                        bytesWritten = llwrite(data, dataSize, I1_MSG, LlTx, &ignoredBytes);   
+                        bytesWritten = llwrite(data, dataSize, I0_MSG, LlTx, &ignoredBytes);   
                         *startIndex += dataSize - ignoredBytes;
 
                     }   
@@ -227,7 +201,7 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
                         *communicationStatus = DisconnectingC;
                     }
                     else {
-                        bytesWritten = llwrite(data, dataSize, I0_MSG, LlTx, &ignoredBytes);                 
+                        bytesWritten = llwrite(data, dataSize, I1_MSG, LlTx, &ignoredBytes);                 
                         *startIndex += dataSize - ignoredBytes;
                     }
                 }
@@ -259,7 +233,7 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
                 }
                 return 0;
 
-            case INVALID_MSG: // ambos são invalidos para o transmissor
+            case INVALID_MSG: 
             default:
                 break;
         }
@@ -276,12 +250,10 @@ int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, M
     unsigned char packet[BUF_SIZE] = {0};
     int dataSize = 0;
 
-    //printf("Receiver Process Entered\n");        
-
 
     int timedOut = FALSE;
     int bytes = 0;
-    llread(packet,messaageRcvd,&timedOut, &bytes); // checkar para o valor de retorno
+    llread(packet,messaageRcvd,&timedOut, &bytes);
 
     switch (*messaageRcvd)
     {
@@ -304,12 +276,6 @@ int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, M
                 appendChunk(fd, packet, bytes);
                 printf("APPENDING %d BYTES\n", bytes);
                 *sequenceNumber = 1;
-                /*
-                if (*sequenceNumber == 0) {
-                    appendChunk(fd, packet, bytes);
-                    printf("APPENDING %d BYTES\n", bytes);
-                    *sequenceNumber = 1;
-                }*/
                 llwrite(data, dataSize, RR1_MSG, LlRx, NULL); 
             }
             break;
@@ -318,13 +284,6 @@ int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, M
                 appendChunk(fd, packet, bytes);
                 printf("APPENDING %d BYTES\n", bytes);
                 *sequenceNumber = 0;
-                /*
-                if (*sequenceNumber == 1) {
-                    appendChunk(fd, packet, bytes);
-                    printf("APPENDING %d BYTES\n", bytes);
-                    *sequenceNumber = 0;
-                }
-                */
                 llwrite(data, dataSize, RR0_MSG, LlRx, NULL);  
             }
             break;
