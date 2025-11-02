@@ -41,16 +41,24 @@ int llwrite(const unsigned char *data, int dataSize, const MessageType messageTy
     unsigned char buf[BUF_SIZE] = {0};
     int bytes = 0;
 
-    printf("\nSending message: %s\n\n", msgs_[messageType]);
+    printf("\nSending message: %s\n", msgs_[messageType]);
 
     if(messageType == I0_MSG || messageType == I1_MSG){
         if(!packetBuilder(messageType, buf, BUF_SIZE, data, dataSize, linkLayerRole, &numStuffs, ignoredBytes)){
             bytes = writeBytesSerialPort(buf, dataSize + 6);
+            if (bytes < 0) {
+                printf("ERROR: Failed to write to serial port\n");
+                return -1;
+            }
         }
     }
     else {
         if(!packetBuilder(messageType, buf, 5, NULL, 0, linkLayerRole, &numStuffs, ignoredBytes)){
             bytes = writeBytesSerialPort(buf, 5);
+            if (bytes < 0) {
+                printf("ERROR: Failed to write to serial port\n");
+                return -1;
+            }
         }
     }
 
@@ -80,7 +88,7 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
         alarmEnabled = TRUE;
         alarmActive = TRUE;
 
-        //printf("Alarm configured\n");
+        printf("Alarm set - waiting for response (timeout: 3s)\n");
 
         *timedOut = FALSE; 
     }
@@ -337,7 +345,15 @@ int llread(unsigned char *packet, MessageType * messageRcvd, int * timedOut, int
 
     if (alarmActive && !alarmEnabled){
         *timedOut = TRUE;
+        printf("Timeout detected - no response received\n");
         return 0;
+    }
+
+    // Cancel alarm if we successfully received a frame
+    if (alarmActive && alarmEnabled) {
+        alarm(0);
+        alarmEnabled = FALSE;
+        printf("Frame received - alarm cancelled\n");
     }
 
     //printf("Frame processing complete\n");
@@ -568,6 +584,7 @@ int packetBuilder(const MessageType messageType, unsigned char * buf, int bufSiz
 void alarmHandler(int signal){
     printf("TIME OUT!\n");
     alarmEnabled = FALSE;
+    alarmCount++;
 }
 
 

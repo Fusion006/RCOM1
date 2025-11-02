@@ -146,14 +146,30 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
 
     int timedOut = ACTIVE;
     int ignoredBytes = 0;
+    static int retryCount = 0;
+    const int MAX_RETRIES = 3;
 
     MessageType messageCntrl = *messageRcvd;
     CommunicationStatus communicationStatusCtrl = *communicationStatus;
     int bytes = 0;
     do {
         if(timedOut == TRUE){
-            printf("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n");
+            printf("TIMEOUT OCCURRED! Retrying... (attempt %d/%d)\n", retryCount + 1, MAX_RETRIES);
             *startIndex = *controlIndex;
+            retryCount++;
+            
+            if (retryCount >= MAX_RETRIES) {
+                printf("MAX RETRIES REACHED. Resetting connection state.\n");
+                retryCount = 0;
+                // Force reconnection by going back to connecting state
+                if (*communicationStatus == OpenC) {
+                    *communicationStatus = ConnectingC;
+                    *messageRcvd = NO_MSG;
+                    return 0;
+                }
+            }
+        } else {
+            retryCount = 0; // Reset on successful transmission
         }
         timedOut = ACTIVE;
         
