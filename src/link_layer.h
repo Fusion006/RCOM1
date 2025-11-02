@@ -26,7 +26,7 @@ int llopen(LinkLayer connectionParameters);
 //   dataSize: Size of the data buffer in bytes.
 //   messageType: Type of message to send (e.g., DATA, SET, UA).
 //   linkLayerRole: Role of the device (TRANSMITTER or RECEIVER).
-//   ignoredBytes: Pointer to an integer that stores how many bytes were ignored due to buffer limits.
+//   ignoredBytes: Pointer to an integer that stores how many bytes were ignored due to buffer size limits.
 // Returns:
 //   Number of bytes written, or -1 on error.
 int llwrite(const unsigned char *data, int dataSize, const MessageType messageType,
@@ -55,7 +55,7 @@ int llclose();
 //   dataSize: Size of the data payload.
 //   role: Role of the device (TRANSMITTER or RECEIVER).
 //   numStuffs: Pointer to track the number of stuffed bytes added.
-//   ignoredBytes: Pointer to track how many bytes were ignored due to size limits.
+//   ignoredBytes: Pointer to track how many bytes were ignored due to buffer size limits.
 // Returns:
 //   Total packet size, or -1 on error.
 int packetBuilder(const MessageType messageType, unsigned char *buf, int bufSize,
@@ -73,11 +73,11 @@ void alarmHandler(int signal);
 //   buffer: Destination buffer for the stuffed data.
 //   dataSize: Number of bytes in the original data.
 //   numStuffs: Pointer to store how many stuffing bytes were added.
-//   ignoredBytes: Pointer to store how many bytes were ignored due to buffer limits.
+//   ignoredBytes: Pointer to store how many bytes were ignored due to buffer size limits.
 // Returns:
 //   Size of the stuffed buffer.
 int stuffing(const unsigned char *data, unsigned char *buffer, const int dataSize,
              int *numStuffs, int *ignoredBytes);
 
-             
+
 #endif // _LINK_LAYER_H_
