@@ -50,6 +50,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     int startIndex = 0;
     int controlIndex = 0; //for rej
     int dataSize = 0;
+    int sequenceNumber = 0; // 0 for I0, 1 for I1
 
 
     CommunicationStatus communicationStatus = ClosedC;
@@ -58,7 +59,7 @@ void applicationLayer(const char *serialPort, const char *role, int baudRate,
     while(communicationStatus != EndC){
         printf("Communication Status : %s\n", comStatus[communicationStatus]);
         if(link.role == LlRx){
-            receiverProcess(link, &communicationStatus, &messageRcvd, fd);
+            receiverProcess(link, &communicationStatus, &messageRcvd, fd, &sequenceNumber);
         }
         else{
             transmitterProcess(link, &communicationStatus, &messageRcvd, fd, &startIndex, &controlIndex);
@@ -151,7 +152,6 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
     int bytes = 0;
     do {
         if(timedOut == TRUE){
-            printf("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n");
             *startIndex = *controlIndex;
         }
         timedOut = ACTIVE;
@@ -271,7 +271,7 @@ int transmitterProcess(LinkLayer link, CommunicationStatus * communicationStatus
 }
 
 
-int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, MessageType * messaageRcvd, int fd){
+int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, MessageType * messaageRcvd, int fd, int *sequenceNumber){
     unsigned char data[BUF_SIZE] = {0};
     unsigned char packet[BUF_SIZE] = {0};
     int dataSize = 0;
@@ -303,14 +303,29 @@ int receiverProcess(LinkLayer link, CommunicationStatus * communicationStatus, M
             if (*communicationStatus == OpenC) {
                 appendChunk(fd, packet, bytes);
                 printf("APPENDING %d BYTES\n", bytes);
-                llwrite(data, dataSize, RR0_MSG, LlRx, NULL); 
+                *sequenceNumber = 1;
+                /*
+                if (*sequenceNumber == 0) {
+                    appendChunk(fd, packet, bytes);
+                    printf("APPENDING %d BYTES\n", bytes);
+                    *sequenceNumber = 1;
+                }*/
+                llwrite(data, dataSize, RR1_MSG, LlRx, NULL); 
             }
             break;
         case I1_MSG:
             if (*communicationStatus == OpenC) {
                 appendChunk(fd, packet, bytes);
                 printf("APPENDING %d BYTES\n", bytes);
-                llwrite(data, dataSize, RR1_MSG, LlRx, NULL); 
+                *sequenceNumber = 0;
+                /*
+                if (*sequenceNumber == 1) {
+                    appendChunk(fd, packet, bytes);
+                    printf("APPENDING %d BYTES\n", bytes);
+                    *sequenceNumber = 0;
+                }
+                */
+                llwrite(data, dataSize, RR0_MSG, LlRx, NULL);  
             }
             break;
         case DISC_MSG:
